@@ -23,7 +23,7 @@ the following categories:
         <th>Description</th>
     </tr>
     <tr>
-        <td><b><a href="https://github.com/voxel51/labs/tree/experimental/plugins/labs_panel">@labs/labs_panel</a></b></td>
+        <td><b><a href="https://github.com/voxel51/labs/tree/develop/plugins/labs_panel">@labs/labs_panel</a></b></td>
         <td>A panel listing all available Labs plugins</td>
     </tr>
 </table>
