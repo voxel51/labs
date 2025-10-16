@@ -24,7 +24,7 @@ def list_labs_plugins(info=False):
         a list of dicts describing the plugins
     """
 
-    repo = GitHubRepository("https://github.com/voxel51/labs/tree/develop")
+    repo = GitHubRepository("https://github.com/voxel51/labs")
     content = repo.get_file("README.md").decode()
     html_content = markdown.markdown(content, extensions=["tables"])
     heading_tables = _read_tables_from_html(html_content)

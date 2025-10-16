@@ -1,6 +1,6 @@
-# Fiftyone Labs
+# FiftyOne Labs
 
-Fiftyone Labs
+FiftyOne Labs brings research solutions and experimental features for machine learning.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ the following categories:
         <th>Description</th>
     </tr>
     <tr>
-        <td><b><a href="https://github.com/voxel51/labs/tree/develop/plugins/labs_panel">@labs/labs_panel</a></b></td>
+        <td><b><a href="https://github.com/voxel51/labs/plugins/labs_panel">@labs/labs_panel</a></b></td>
         <td>A panel listing all available Labs plugins</td>
     </tr>
 </table>
@@ -37,7 +37,7 @@ the following categories:
     </tr>
     <tr>
         <td><b><a href="https://github.com/griffbr/hello-labs">@griffbr/hello-labs</a></b></td>
-        <td>First labs plugin</td>
+        <td>First Labs plugin</td>
     </tr>
 </table>
 
