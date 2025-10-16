@@ -49,7 +49,7 @@ the following categories:
         <th>Description</th>
     </tr>
     <tr>
-        <td><b><a href="https://github.com/griffbr/hello-labs">@griffbr/hello-labs</a></b></td>
-        <td>First labs plugin</td>
+        <td><b><a href="https://github.com/griffbr/box-combine">@griffbr/box-combine</a></b></td>
+        <td>Weighted Box Fusion for detections</td>
     </tr>
 </table>
