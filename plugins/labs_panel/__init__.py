@@ -14,8 +14,7 @@ class LabsPanel(foo.Panel):
         )
 
     def on_load(self, ctx):
-        # TODO: Change to assets path when repo is public
-        ctx.panel.state.logo = "https://raw.githubusercontent.com/manushreegangwar/assets/refs/heads/main/labs_logo_full_dark.png"
+        ctx.panel.state.logo = "https://raw.githubusercontent.com/voxel51/labs/7ac45f8d8d968e0d3471a0e600d8c029c70454fc/assets/labs_logo.svg"
 
         plugins = add_version_info_to_features(list_labs_features())
         ctx.panel.state.table = plugins
