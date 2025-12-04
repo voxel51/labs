@@ -25,7 +25,9 @@ def list_labs_features(info=False):
         a list of dicts describing the features
     """
 
-    repo = GitHubRepository("https://github.com/voxel51/labs")
+    repo = GitHubRepository(
+        "https://github.com/voxel51/labs/tree/manushree/updates"
+    )
     content = repo.get_file("README.md").decode()
     html_content = markdown.markdown(content, extensions=["tables"])
     heading_tables = _read_tables_from_html(html_content)
