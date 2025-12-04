@@ -137,7 +137,7 @@ class LabsPanel(foo.Panel):
                     on_click=self.show_url,
                     color="51",
                 )
-                if p.get("curr_version"):
+                if p.get("curr_version") and p["name"] != "@51labs/labs_panel":
                     menu.btn(
                         f"{p['name']}_uninstall",
                         label="Uninstall",
