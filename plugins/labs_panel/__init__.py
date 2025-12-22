@@ -50,6 +50,7 @@ class LabsPanel(foo.Panel):
                     zip_path = _download_plugin_dir(
                         p["url"], extract_to="/tmp/plugins"
                     )
+                    fom.reload_api_connection()
                     fom.upload_plugin(
                         zip_path, overwrite=p.get("curr_version") is not None
                     )
@@ -87,6 +88,7 @@ class LabsPanel(foo.Panel):
                 curr_version = p.get("curr_version")
                 if curr_version:
                     if is_enterprise():
+                        fom.reload_api_connection()
                         fom.delete_plugin(ctx.panel.state.selection)
                     else:
                         fop.delete_plugin(ctx.panel.state.selection)
