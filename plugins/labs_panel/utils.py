@@ -1,8 +1,7 @@
 import logging
-import markdown
+import re
 from bs4 import BeautifulSoup
 
-import fiftyone as fo
 from fiftyone.utils.github import GitHubRepository
 import fiftyone.plugins.utils as fopu
 import fiftyone.plugins.core as fopc
@@ -27,38 +26,63 @@ def list_labs_features(info=False):
 
     repo = GitHubRepository("https://github.com/voxel51/labs")
     content = repo.get_file("README.md").decode()
-    html_content = markdown.markdown(content, extensions=["tables"])
-    heading_tables = _read_tables_from_html(html_content)
+
+    # Find h2 headings (##) in the readme
+    h2_pattern = r"^## (.+)$"
+    headings = []
+    for match in re.finditer(h2_pattern, content, re.MULTILINE):
+        headings.append(
+            {"h2_heading": match.group(1), "h2_position": match.start()}
+        )
+
+    # Find tables in the readme
+    table_pattern = r"<table>.*?</table>"
+    tables = []
+    for match in re.finditer(table_pattern, content, re.DOTALL):
+        tables.append(
+            {"table_content": match.group(0), "table_position": match.start()}
+        )
 
     plugins = []
-    for heading in heading_tables:
-        table = heading_tables[heading]
-        rows = table.find_all("tr")
-        for row in rows:
-            cols = row.find_all("td")
-            if len(cols) != 2:
-                continue
+    for i, heading in enumerate(headings):
+        heading_text = heading["h2_heading"]
+        heading_pos = heading["h2_position"]
 
-            try:
-                name = cols[0].text.strip()
-                url = cols[0].find("a")["href"]
-                description = cols[1].text.strip()
-                plugins.append(
-                    dict(
-                        name=name,
-                        url=url,
-                        description=description,
-                        category=heading,
-                    )
-                )
-            except Exception as e:
-                logger.debug("Failed to parse plugin row: %s", e)
+        next_heading_pos = (
+            headings[i + 1]["h2_position"]
+            if i + 1 < len(headings)
+            else len(content)
+        )
+
+        for table in tables:
+            if heading_pos < table["table_position"] < next_heading_pos:
+                soup = BeautifulSoup(table["table_content"], "html.parser")
+                table_elem = soup.find("table")
+
+                for row in table_elem.find_all("tr"):
+                    cols = row.find_all(["td"])
+                    if len(cols) != 2:
+                        continue
+
+                    try:
+                        name = cols[0].text.strip()
+                        url = cols[0].find("a")["href"]
+                        description = cols[1].text.strip()
+                        plugins.append(
+                            dict(
+                                name=name,
+                                url=url,
+                                description=description,
+                                category=heading_text,
+                            )
+                        )
+                    except Exception as e:
+                        logger.debug("Failed to parse plugin row: %s", e)
 
     if not info:
         return plugins
 
-    tasks = [(p["url"], None) for p in plugins]
-    return fopu.get_plugin_info(tasks)
+    return [fopu.get_plugin_info(p["url"], None) for p in plugins]
 
 
 def add_version_info_to_features(lab_features):
@@ -85,22 +109,3 @@ def add_version_info_to_features(lab_features):
             p["curr_version"] = plugin_def.version
 
     return lab_features
-
-
-def _read_tables_from_html(html_content):
-    soup = BeautifulSoup(html_content, "html.parser")
-
-    headings = soup.find_all("h2")
-    heading_tables = {}
-
-    for heading in headings:
-        heading_text = heading.get_text()
-        table = heading.find_next("table")
-
-        next_heading = heading.find_next(["h1", "h2", "h3", "h4", "h5", "h6"])
-        if table and (
-            not next_heading or table.sourceline < next_heading.sourceline
-        ):
-            heading_tables[heading_text] = table
-
-    return heading_tables
