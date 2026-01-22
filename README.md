@@ -38,6 +38,22 @@ FiftyOne Labs Features which are developed using the [FiftyOne plugins ecosystem
         <td><b><a href="https://github.com/voxel51/zero-shot-coreset-selection">@51labs/zero-shot-coreset-selection</a></b></td>
         <td>Zero-shot coreset selection (ZCore) for unlabeled image data</td>
     </tr>
+    <!-- <tr>
+        <td><b><a href="https://github.com/jacobmarks/active-learning-plugin">@51labs/active_learning</a></b></td>
+        <td>Label your dataset with active learning using modAL library</td>
+    </tr>
+    <tr>
+        <td><b><a href="https://github.com/jacobmarks/reverse-image-search-plugin">@51labs/reverse_image_search</a></b></td>
+        <td>Reverse image search within a FiftyOne dataset using similarity indices</td>
+    </tr>
+    <tr>
+        <td><b><a href="https://github.com/swheaton/fiftyone-media-anonymization-plugin">@51labs/media_anonymization</a></b></td>
+        <td>Anonymize media by blurring detected objects in images/videos</td>
+    </tr>
+    <tr>
+        <td><b><a href="https://github.com/danielgural/clustering_algorithms">@51labs/clustering_algorithms</a></b></td>
+        <td>Clustering algorithms via sklearn to cluster samples in FiftyOne</td>
+    </tr> -->
 </table>
 
 ## Visualization Lab

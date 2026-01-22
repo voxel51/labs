@@ -24,7 +24,7 @@ def list_labs_features(info=False):
         a list of dicts describing the features
     """
 
-    repo = GitHubRepository("https://github.com/voxel51/labs")
+    repo = GitHubRepository("https://github.com/voxel51/labs/tree/neeraja/cosmetic-changes")
     content = repo.get_file("README.md").decode()
 
     # Find h2 headings (##) in the readme
