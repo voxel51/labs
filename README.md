@@ -38,6 +38,10 @@ FiftyOne Labs Features which are developed using the [FiftyOne plugins ecosystem
         <td><b><a href="https://github.com/voxel51/zero-shot-coreset-selection">@51labs/zero-shot-coreset-selection</a></b></td>
         <td>Zero-shot coreset selection (ZCore) for unlabeled image data</td>
     </tr>
+    <tr>
+        <td><b><a href="https://github.com/manushreegangwar/click_segmentation">@51labs/click-segmentation</a></b></td>
+        <td>Interactive image segmentation via point prompts</td>
+    </tr>
 </table>
 
 ## Visualization Lab
