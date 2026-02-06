@@ -3,14 +3,14 @@
 import json
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 import fiftyone as fo
 import fiftyone.zoo as foz
 import fiftyone.operators as foo
 import fiftyone.operators.types as types
 
-from fewshot_testbed.models import get_model
+from .models import get_model
 
 # Supported classification models for few-shot learning
 SUPPORTED_MODELS = [
@@ -76,7 +76,7 @@ class FewShotSession:
 
     # Model configuration
     model_name: str = "LinearSVMModel"
-    model_hyperparams: dict = field(default_factory=dict)
+    model_hyperparams: dict[str, Any] = field(default_factory=dict)
 
     # DataLoader settings
     batch_size: int = 1024
@@ -85,17 +85,19 @@ class FewShotSession:
     skip_failures: bool = True
 
     # Session state
-    positive_ids: list = field(default_factory=list)
-    negative_ids: list = field(default_factory=list)
+    positive_ids: list[str] = field(default_factory=list)
+    negative_ids: list[str] = field(default_factory=list)
     iteration: int = 0
 
     # Subset sampling settings
     working_subset_size: int = 0  # 0 means no limit (use all samples)
     use_full_dataset: bool = False  # False = sample from current view; True = ignore view
     randomize_subset: bool = False  # Re-sample each iteration
-    subset_ids: list = field(default_factory=list)  # Cached subset IDs when not randomizing
+    subset_ids: list[str] = field(
+        default_factory=list
+    )  # Cached subset IDs when not randomizing
 
-    def add_positives(self, ids: list):
+    def add_positives(self, ids: list[str]) -> None:
         """Add IDs to positive set (retained across iterations)."""
         for sample_id in ids:
             if sample_id not in self.positive_ids:
@@ -103,7 +105,7 @@ class FewShotSession:
             if sample_id in self.negative_ids:
                 self.negative_ids.remove(sample_id)
 
-    def add_negatives(self, ids: list):
+    def add_negatives(self, ids: list[str]) -> None:
         """Add IDs to negative set (retained across iterations)."""
         for sample_id in ids:
             if sample_id not in self.negative_ids:
@@ -112,9 +114,11 @@ class FewShotSession:
                 self.positive_ids.remove(sample_id)
 
     def can_train(self) -> bool:
+        """Return whether minimum labels exist to run training."""
         return len(self.positive_ids) >= 1 and len(self.negative_ids) >= 1
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, int]:
+        """Return simple session counters for the panel header."""
         return {
             "iteration": self.iteration,
             "positives": len(self.positive_ids),
@@ -126,20 +130,22 @@ class FewShotLearningPanel(foo.Panel):
     """Interactive panel for few-shot learning with multiple model types."""
 
     @property
-    def config(self):
+    def config(self) -> foo.PanelConfig:
+        """Panel registration metadata."""
         return foo.PanelConfig(
             name="few_shot_learning",
             label="Few-Shot Learning",
         )
 
-    def _get_session(self, ctx) -> Optional[FewShotSession]:
+    def _get_session(self, ctx: Any) -> Optional[FewShotSession]:
         """Get current session from panel state."""
         try:
             session_data = ctx.panel.state.session
             if session_data is None:
                 return None
 
-            def _get(key, default):
+            def _get(key: str, default: Any) -> Any:
+                """Read values from either dict-like or attribute-like state."""
                 if isinstance(session_data, dict):
                     return session_data.get(key, default)
                 return getattr(session_data, key, default)
@@ -172,7 +178,7 @@ class FewShotLearningPanel(foo.Panel):
         except (AttributeError, TypeError):
             return None
 
-    def _save_session(self, ctx, session: FewShotSession):
+    def _save_session(self, ctx: Any, session: FewShotSession) -> None:
         """Save session to panel state."""
         ctx.panel.state.session = {
             "embedding_field": session.embedding_field,
@@ -192,13 +198,13 @@ class FewShotLearningPanel(foo.Panel):
             "subset_ids": session.subset_ids,
         }
 
-    def _clear_session(self, ctx):
+    def _clear_session(self, ctx: Any) -> None:
         """Clear session from panel state."""
         ctx.panel.state.session = None
 
-    def _get_embedding_fields(self, ctx) -> list:
+    def _get_embedding_fields(self, ctx: Any) -> list[str]:
         """Get list of embedding fields in dataset."""
-        fields = []
+        fields: list[str] = []
         schema = ctx.dataset.get_field_schema()
         for name, field_obj in schema.items():
             if hasattr(field_obj, "document_type"):
@@ -209,7 +215,7 @@ class FewShotLearningPanel(foo.Panel):
             fields.append("resnet18_embeddings")
         return fields
 
-    def _render_hyperparams(self, panel, model_name: str):
+    def _render_hyperparams(self, panel: types.Object, model_name: str) -> None:
         """Render individual hyperparameter fields for the selected model."""
         schema = MODEL_HYPERPARAMS.get(model_name, {})
 
@@ -259,10 +265,10 @@ class FewShotLearningPanel(foo.Panel):
                     description=description,
                 )
 
-    def _collect_hyperparams(self, ctx, model_name: str) -> dict:
+    def _collect_hyperparams(self, ctx: Any, model_name: str) -> dict[str, Any]:
         """Collect hyperparameter values from panel state."""
         schema = MODEL_HYPERPARAMS.get(model_name, {})
-        hyperparams = {}
+        hyperparams: dict[str, Any] = {}
 
         for param_name, param_info in schema.items():
             default_val = param_info[0]
@@ -276,7 +282,7 @@ class FewShotLearningPanel(foo.Panel):
 
         return hyperparams
 
-    def _ensure_embeddings(self, ctx, field_name: str):
+    def _ensure_embeddings(self, ctx: Any, field_name: str) -> None:
         """Compute embeddings if they don't exist."""
         schema = ctx.dataset.get_field_schema()
         if field_name not in schema:
@@ -296,7 +302,9 @@ class FewShotLearningPanel(foo.Panel):
                 variant="success",
             )
 
-    def _get_inference_view(self, ctx, session: FewShotSession):
+    def _get_inference_view(
+        self, ctx: Any, session: FewShotSession
+    ) -> tuple[Any, int]:
         """Get the view to use for inference, applying subset sampling if configured.
 
         Samples from:
@@ -345,7 +353,7 @@ class FewShotLearningPanel(foo.Panel):
 
         return ctx.dataset.select(subset_ids), len(subset_ids)
 
-    def compute_embeddings(self, ctx):
+    def compute_embeddings(self, ctx: Any) -> None:
         """Compute embeddings using selected zoo model."""
         model_key = getattr(ctx.panel.state, "compute_model", None) or "ResNet18"
         field_name = getattr(ctx.panel.state, "compute_field_name", None) or ""
@@ -389,11 +397,11 @@ class FewShotLearningPanel(foo.Panel):
             variant="success",
         )
 
-    def on_load(self, ctx):
+    def on_load(self, ctx: Any) -> None:
         """Initialize panel state."""
         pass
 
-    def on_change_selected(self, ctx):
+    def on_change_selected(self, ctx: Any) -> None:
         """Capture sample selection changes.
 
         Note: We intentionally do NOT update panel state here to avoid
@@ -402,7 +410,7 @@ class FewShotLearningPanel(foo.Panel):
         """
         pass
 
-    def start_session(self, ctx):
+    def start_session(self, ctx: Any) -> None:
         """Start a new few-shot learning session."""
         embedding_field = (
             getattr(ctx.panel.state, "embedding_field", None)
@@ -447,7 +455,7 @@ class FewShotLearningPanel(foo.Panel):
             variant="success",
         )
 
-    def label_positive(self, ctx):
+    def label_positive(self, ctx: Any) -> None:
         """Label selected samples as positive."""
         session = self._get_session(ctx)
         if not session:
@@ -467,7 +475,7 @@ class FewShotLearningPanel(foo.Panel):
             variant="success",
         )
 
-    def label_negative(self, ctx):
+    def label_negative(self, ctx: Any) -> None:
         """Label selected samples as negative."""
         session = self._get_session(ctx)
         if not session:
@@ -487,7 +495,7 @@ class FewShotLearningPanel(foo.Panel):
             variant="success",
         )
 
-    def train_and_apply(self, ctx):
+    def train_and_apply(self, ctx: Any) -> None:
         """Train selected model on labels and apply to entire dataset using DataLoader."""
         session = self._get_session(ctx)
         if not session:
@@ -514,7 +522,7 @@ class FewShotLearningPanel(foo.Panel):
 
         ctx.ops.notify(f"Training {session.model_name}...", variant="info")
 
-        # Create model using fewshot_testbed registry
+        # Create model from local few-shot model factory
         model = get_model(session.model_name, session.model_hyperparams)
 
         # Check if model is GraphLabelPropagationModel (transductive)
@@ -603,7 +611,7 @@ class FewShotLearningPanel(foo.Panel):
         )
 
         # Run inference and collect predictions
-        predictions_map = {}
+        predictions_map: dict[str, fo.Classification] = {}
         for batch in dataloader:
             # Get sample IDs before prediction
             sample_ids = batch["ids"]
@@ -655,7 +663,7 @@ class FewShotLearningPanel(foo.Panel):
             variant="success",
         )
 
-    def view_positives(self, ctx):
+    def view_positives(self, ctx: Any) -> None:
         """Show user-labeled positive samples."""
         session = self._get_session(ctx)
         if session and session.positive_ids:
@@ -664,7 +672,7 @@ class FewShotLearningPanel(foo.Panel):
         else:
             ctx.ops.notify("No positives labeled yet", variant="info")
 
-    def view_negatives(self, ctx):
+    def view_negatives(self, ctx: Any) -> None:
         """Show user-labeled negative samples."""
         session = self._get_session(ctx)
         if session and session.negative_ids:
@@ -673,7 +681,7 @@ class FewShotLearningPanel(foo.Panel):
         else:
             ctx.ops.notify("No negatives labeled yet", variant="info")
 
-    def view_predictions(self, ctx):
+    def view_predictions(self, ctx: Any) -> None:
         """Show samples predicted as positive by the model."""
         session = self._get_session(ctx)
         if not session:
@@ -693,11 +701,11 @@ class FewShotLearningPanel(foo.Panel):
         view = view.sort_by(f"{session.label_field}.confidence", reverse=True)
         ctx.ops.set_view(view)
 
-    def view_all(self, ctx):
+    def view_all(self, ctx: Any) -> None:
         """Show all samples (clear view)."""
         ctx.ops.clear_view()
 
-    def export_positives(self, ctx):
+    def export_positives(self, ctx: Any) -> None:
         """Tag all user-labeled positives."""
         session = self._get_session(ctx)
         if not session or not session.positive_ids:
@@ -711,7 +719,7 @@ class FewShotLearningPanel(foo.Panel):
             variant="success",
         )
 
-    def reset_session(self, ctx):
+    def reset_session(self, ctx: Any) -> None:
         """Clear session and delete prediction field."""
         session = self._get_session(ctx)
         if session:
@@ -723,7 +731,8 @@ class FewShotLearningPanel(foo.Panel):
         ctx.ops.clear_view()
         ctx.ops.notify("Session reset", variant="info")
 
-    def render(self, ctx):
+    def render(self, ctx: Any) -> types.Property:
+        """Render the panel UI based on active session state."""
         panel = types.Object()
 
         try:

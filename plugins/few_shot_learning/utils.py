@@ -10,6 +10,7 @@ class EmbeddingsGetItem(GetItem):
 
     @property
     def required_keys(self) -> list[str]:
+        """Return fields required from each sample."""
         return ["embeddings", "id"]
 
     def __call__(self, d: dict) -> dict:

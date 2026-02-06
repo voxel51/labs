@@ -21,12 +21,11 @@ Interactive few-shot learning panel for FiftyOne that lets you train classifiers
 
 ## Prerequisites
 
-This plugin requires the `fewshot_testbed` library which contains the model implementations.
+The plugin ships with self-contained model implementations. Required Python dependencies are:
 
-```bash
-# Add fewshot_testbed to your Python path
-export PYTHONPATH="${PYTHONPATH}:/path/to/fewshot_testbed"
-```
+- `numpy`
+- `scikit-learn`
+- `torch`
 
 ## Installation
 
@@ -44,7 +43,6 @@ Run the demo script to launch with a sample dataset:
 
 ```bash
 cd /path/to/fiftyone-labs
-export PYTHONPATH="${PYTHONPATH}:/path/to/fewshot_testbed"
 python plugins/few_shot_learning/run_demo.py
 ```
 
@@ -74,12 +72,13 @@ The plugin works with any embedding field in your dataset. If the selected field
 
 ### Model Hyperparameters
 
-Pass model-specific parameters as JSON:
+Model hyperparameters are configured directly in the panel UI for the selected model:
 
-- **LinearSVMModel**: `{"C": 1.0}` - regularization strength
-- **NCAMetricLearningModel**: `{"n_components": 64}` - embedding dimension
-- **LMNNMetricLearningModel**: `{"n_components": 64, "k": 3}` - dimension and neighbors
-- **GraphLabelPropagationModel**: `{"n_neighbors": 10}` - graph connectivity
+- **LinearSVMModel**: `C`, `max_iter`
+- **RocchioPrototypeModel**: `mode`, `beta`, `gamma`, `temperature`
+- **NCAMetricLearningModel**: `n_components`, `max_iter`
+- **LMNNMetricLearningModel**: `n_components`, `k`, `max_iter`, `learning_rate`
+- **GraphLabelPropagationModel**: `n_neighbors`, `alpha`, `max_iter`
 
 ### Advanced Settings
 
