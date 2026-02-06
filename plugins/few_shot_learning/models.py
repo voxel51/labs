@@ -142,7 +142,7 @@ class RocchioPrototypeModel(_BaseModel):
         self._beta = float(self.hyperparams.get("beta", 1.0))
         self._gamma = float(self.hyperparams.get("gamma", 1.0))
         self._temperature = float(self.hyperparams.get("temperature", 1.0))
-        self._normalize_embeddings = bool(self.hyperparams.get("normalize_embeddings", False))
+        self._normalize_embeddings = bool(self.hyperparams.get("normalize_embeddings", True))
 
         self._pos_centroid: np.ndarray | None = None
         self._neg_centroid: np.ndarray | None = None
