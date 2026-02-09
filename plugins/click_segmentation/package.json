@@ -13,10 +13,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/voxel51/labs/tree/main/plugins/click_segmentation"
+    "url": "https://github.com/voxel51/fiftyone-labs/tree/main/plugins/click_segmentation"
   },
-  "author": "Voxel51, Inc.",
-  "license": "MIT",
   "dependencies": {
     "@fiftyone/components": "portal:../../../fiftyone/app/packages/components",
     "@fiftyone/looker": "portal:../../../fiftyone/app/packages/looker",

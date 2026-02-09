@@ -26,12 +26,13 @@ class SaveKeypoints(foo.Operator):
         return types.Property(inputs)
 
     def execute(self, ctx):
+        if not ctx.current_sample:
+            raise Exception("No sample is active in the App's Sample modal.")
+        sample = ctx.dataset[ctx.current_sample]
         keypoints = ctx.params["keypoints"]
         field_name = ctx.params["field_name"]
         label_name = ctx.params["label_name"]
 
-        dataset = ctx.dataset
-        sample = dataset[ctx.current_sample]
         keypoint = fo.Keypoint(points=keypoints, label=label_name)
 
         if sample.has_field(field_name) and sample[field_name] is not None:
