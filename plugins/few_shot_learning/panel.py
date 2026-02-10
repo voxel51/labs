@@ -4,7 +4,6 @@ import contextlib
 import hashlib
 import io
 import json
-import multiprocessing
 import uuid
 import numpy as np
 from dataclasses import asdict, dataclass, field
@@ -37,45 +36,6 @@ EMBEDDING_FIELD_DEFAULTS = {
     "CLIP (ViT-B/32)": "clip_vit_b32_embeddings",
     "DINOv2 (ViT-B/14)": "dinov2_vitb14_embeddings",
 }
-
-import logging
-
-_logger = logging.getLogger(__name__)
-
-
-def _safe_num_workers(requested: int) -> int:
-    """Return a safe ``num_workers`` value for :class:`DataLoader`.
-
-    In daemon processes (e.g. FiftyOne Teams operator workers) spawning
-    child processes is forbidden, so we fall back to ``0`` (in-process
-    loading).  Invalid inputs (``None``, negative, non-int) are
-    sanitised to ``0``.
-    """
-    try:
-        workers = max(0, int(requested))
-    except (TypeError, ValueError):
-        workers = 0
-
-    if workers == 0:
-        return 0
-
-    if multiprocessing.current_process().daemon:
-        _logger.info(
-            "Running inside a daemon process — forcing "
-            "num_workers=0 (data loading may be slower)."
-        )
-        return 0
-
-    start_method = multiprocessing.get_start_method(allow_none=True)
-    if start_method and start_method != "fork":
-        _logger.info(
-            "Multiprocessing start method '%s' detected; "
-            "forcing num_workers=0 for DataLoader compatibility.",
-            start_method,
-        )
-        return 0
-
-    return workers
 
 
 EMBEDDING_DIMENSIONS = {
@@ -130,7 +90,7 @@ class FewShotSession:
 
     # DataLoader settings
     batch_size: int = 16
-    num_workers: int = 8
+    num_workers: int = 0
     skip_failures: bool = True
 
     # Session state
@@ -224,7 +184,7 @@ class FewShotLearningPanel(foo.Panel):
                 model_name=model_name,
                 model_hyperparams=hyperparams,
                 batch_size=int(_get("batch_size", 16)),
-                num_workers=int(_get("num_workers", 8)),
+                num_workers=int(_get("num_workers", 0)),
                 skip_failures=bool(_get("skip_failures", True)),
                 positive_ids=list(_get("positive_ids", [])),
                 negative_ids=list(_get("negative_ids", [])),
@@ -368,7 +328,7 @@ class FewShotLearningPanel(foo.Panel):
                     model,
                     embeddings_field=field_name,
                     batch_size=32,
-                    num_workers=_safe_num_workers(4),
+                    num_workers=0,
                     skip_failures=True,
                 )
         except Exception as e:
@@ -500,7 +460,7 @@ class FewShotLearningPanel(foo.Panel):
         batch_size = getattr(ctx.panel.state, "batch_size", None) or 16
         num_workers = getattr(ctx.panel.state, "num_workers", None)
         if num_workers is None:
-            num_workers = 8
+            num_workers = 0
         skip_failures = getattr(ctx.panel.state, "skip_failures", True)
 
         # Subset sampling settings
@@ -742,7 +702,7 @@ class FewShotLearningPanel(foo.Panel):
         dataloader = DataLoader(
             torch_dataset,
             batch_size=session.batch_size,
-            num_workers=_safe_num_workers(session.num_workers),
+            num_workers=0,  # must be 0: plugin module path (@51labs) breaks pickling
             collate_fn=collate_fn,
         )
 
@@ -920,7 +880,7 @@ class FewShotLearningPanel(foo.Panel):
             panel.int(
                 "num_workers",
                 label="Num Workers",
-                default=8,
+                default=0,
                 description="Number of DataLoader workers "
                 "(0 for main thread)",
             )
