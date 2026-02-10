@@ -1,5 +1,6 @@
 """Utility classes and functions for few-shot learning."""
 
+import copyreg
 import numpy as np
 import torch
 from fiftyone.utils.torch import GetItem
@@ -27,6 +28,36 @@ class EmbeddingsGetItem(GetItem):
             embeddings = embeddings.float()
 
         return {"embeddings": embeddings, "id": sample_id}
+
+    def __reduce__(self):
+        """Custom pickling to handle namespace package import issues.
+        
+        This method works together with copyreg.pickle registration to ensure
+        the class can be pickled even with namespace package paths.
+        """
+        return (_unpickle_embeddings_getitem, ())
+
+
+def _reduce_embeddings_getitem(obj):
+    """Custom reducer for EmbeddingsGetItem pickling.
+    
+    Returns a tuple (callable, args) that pickle can use to reconstruct
+    the object. We use a function that creates a new instance.
+    """
+    return (_unpickle_embeddings_getitem, ())
+
+
+def _unpickle_embeddings_getitem():
+    """Unpickle helper that reconstructs EmbeddingsGetItem instances.
+    
+    This function is called by pickle to reconstruct EmbeddingsGetItem
+    instances. Since EmbeddingsGetItem doesn't have instance state
+    (field_mapping is set after creation), we can just create a new instance.
+    """
+    return EmbeddingsGetItem()
+
+
+copyreg.pickle(EmbeddingsGetItem, _reduce_embeddings_getitem)
 
 
 def collate_fn(batch: list) -> dict:

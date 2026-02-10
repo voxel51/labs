@@ -67,7 +67,7 @@ MODEL_HYPERPARAMS = {
     },
 }
 
-from .utils import EmbeddingsGetItem, collate_fn, extract_probability
+from .utils import collate_fn, extract_probability
 
 
 def _view_fingerprint(ids: list[str]) -> str:
@@ -689,6 +689,8 @@ class FewShotLearningPanel(foo.Panel):
                 pass  # Model may not support output processor
 
         # Run inference using DataLoader on the inference view (possibly subset)
+        # Import locally to avoid pickling issues with namespace package
+        from .utils import EmbeddingsGetItem
         get_item = EmbeddingsGetItem()
         get_item.field_mapping = {"embeddings": session.embedding_field}
 
