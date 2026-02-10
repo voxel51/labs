@@ -4,6 +4,9 @@ import contextlib
 import hashlib
 import io
 import json
+import logging
+import multiprocessing
+import pickle
 import uuid
 import numpy as np
 from dataclasses import asdict, dataclass, field
@@ -68,6 +71,70 @@ MODEL_HYPERPARAMS = {
 }
 
 from .utils import EmbeddingsGetItem, collate_fn, extract_probability
+
+_logger = logging.getLogger(__name__)
+
+
+def _safe_num_workers(requested: int) -> int:
+    """Return a safe ``num_workers`` value for :class:`DataLoader`.
+
+    Sanitises invalid inputs (``None``, negative, non-int) to ``0``.
+    Forces ``0`` in daemon processes (e.g. FiftyOne Teams operator
+    workers) where spawning children is forbidden.
+    """
+    try:
+        workers = max(0, int(requested))
+    except (TypeError, ValueError):
+        workers = 0
+
+    if workers > 0 and multiprocessing.current_process().daemon:
+        _logger.info(
+            "Running inside a daemon process — forcing "
+            "num_workers=0 (data loading may be slower)."
+        )
+        return 0
+
+    return workers
+
+
+def _fork_context():
+    """Return a ``'fork'`` multiprocessing context when available.
+
+    The ``fork`` start method copies the parent's address space into the
+    worker, so it never needs to *pickle* the dataset or its
+    ``GetItem`` callable — side-stepping the un-importable
+    ``@51labs...`` module path that breaks ``spawn``.
+
+    Returns ``None`` when fork is unavailable (Windows, restricted
+    containers, etc.) so the caller should fall back to
+    ``num_workers=0``.
+    """
+    if "fork" not in multiprocessing.get_all_start_methods():
+        return None
+    try:
+        return multiprocessing.get_context("fork")
+    except ValueError:
+        return None
+
+
+_MP_ERROR_MARKERS = (
+    "daemonic processes",
+    "can't pickle",
+    "forkingpickler",
+    "@51labs",
+    "broken pipe",
+    "connection reset",
+    "dataloader worker",
+    "exited unexpectedly",
+)
+
+
+def _is_mp_error(exc: BaseException) -> bool:
+    """Return True if *exc* looks like a multiprocessing/pickling failure."""
+    if isinstance(exc, pickle.PicklingError):
+        return True
+    msg = str(exc).lower()
+    return any(m in msg for m in _MP_ERROR_MARKERS)
 
 
 def _view_fingerprint(ids: list[str]) -> str:
@@ -458,9 +525,9 @@ class FewShotLearningPanel(foo.Panel):
             ctx.panel.state, "embedding_field", None
         ) or EMBEDDING_FIELD_DEFAULTS.get(embedding_model, "embeddings")
         batch_size = getattr(ctx.panel.state, "batch_size", None) or 16
-        num_workers = getattr(ctx.panel.state, "num_workers", None)
-        if num_workers is None:
-            num_workers = 0
+        num_workers = _safe_num_workers(
+            getattr(ctx.panel.state, "num_workers", 0)
+        )
         skip_failures = getattr(ctx.panel.state, "skip_failures", True)
 
         # Subset sampling settings
@@ -652,10 +719,12 @@ class FewShotLearningPanel(foo.Panel):
         neg_emb_values = neg_view.values(session.embedding_field)
 
         pos_emb = np.array(
-            [emb for emb in pos_emb_values if emb is not None], dtype=np.float32
+            [emb for emb in pos_emb_values if emb is not None],
+            dtype=np.float32,
         )
         neg_emb = np.array(
-            [emb for emb in neg_emb_values if emb is not None], dtype=np.float32
+            [emb for emb in neg_emb_values if emb is not None],
+            dtype=np.float32,
         )
 
         missing_pos = len(pos_emb_values) - len(pos_emb)
@@ -699,42 +768,66 @@ class FewShotLearningPanel(foo.Panel):
             vectorize=True,
             skip_failures=session.skip_failures,
         )
+
+        num_workers = _safe_num_workers(session.num_workers)
+        mp_context = _fork_context() if num_workers > 0 else None
+        if num_workers > 0 and mp_context is None:
+            _logger.info(
+                "fork start method unavailable — forcing "
+                "num_workers=0 to avoid spawn/pickling issues."
+            )
+            num_workers = 0
         dataloader = DataLoader(
             torch_dataset,
             batch_size=session.batch_size,
-            num_workers=0,  # must be 0: plugin module path (@51labs) breaks pickling
+            num_workers=num_workers,
             collate_fn=collate_fn,
+            multiprocessing_context=mp_context,
         )
 
         # Run inference and collect predictions
         predictions_map: dict[str, fo.Classification] = {}
-        for batch in dataloader:
-            # Get sample IDs before prediction
-            sample_ids = batch["ids"]
 
-            # Skip empty batches (can happen with skip_failures=True)
-            if len(sample_ids) == 0:
-                continue
+        def _iter_batches(loader):
+            for batch in loader:
+                sample_ids = batch["ids"]
+                if len(sample_ids) == 0:
+                    continue
+                model_batch = {"embeddings": batch["embeddings"].numpy()}
+                output = model.predict(model_batch)
+                probs = extract_probability(output, session.model_name)
+                for sample_id, prob in zip(sample_ids, probs):
+                    label = "positive" if prob >= 0.5 else "negative"
+                    confidence = prob if label == "positive" else 1.0 - prob
+                    predictions_map[sample_id] = fo.Classification(
+                        label=label,
+                        confidence=float(confidence),
+                    )
 
-            # Prepare batch for model (remove ids)
-            model_batch = {
-                "embeddings": batch["embeddings"].numpy()
-            }
-
-            # Run prediction
-            output = model.predict(model_batch)
-
-            # Extract probabilities (pass model_name for correct score handling)
-            probs = extract_probability(output, session.model_name)
-
-            # Convert to FiftyOne Classifications
-            for sample_id, prob in zip(sample_ids, probs):
-                label = "positive" if prob >= 0.5 else "negative"
-                confidence = prob if label == "positive" else 1.0 - prob
-                predictions_map[sample_id] = fo.Classification(
-                    label=label,
-                    confidence=float(confidence),
-                )
+        try:
+            _iter_batches(dataloader)
+        except (
+            RuntimeError,
+            pickle.PicklingError,
+            AssertionError,
+            OSError,
+            ModuleNotFoundError,
+        ) as exc:
+            if not _is_mp_error(exc):
+                raise
+            _logger.warning(
+                "DataLoader workers failed (%s); retrying with "
+                "num_workers=0.",
+                exc,
+            )
+            dataloader = DataLoader(
+                torch_dataset,
+                batch_size=session.batch_size,
+                num_workers=0,
+                collate_fn=collate_fn,
+            )
+            predictions_map.clear()
+            _iter_batches(dataloader)
 
         # Enforce user-provided training labels exactly on labeled IDs.
         # This avoids contradiction between explicit training labels and
