@@ -31,7 +31,7 @@ FiftyOne Labs Features which are developed using the [FiftyOne plugins ecosystem
         <td>Apply image model to video dataset using torch dataloader</td>
     </tr>
     <tr>
-        <td><b><a href="https://github.com/voxel51/labs/tree/main/plugins/few_shot_learning">@51labs/few_shot_learning</a></b></td>
+        <td><b><a href="https://github.com/voxel51/fiftyone-labs/tree/main/plugins/few_shot_learning">@51labs/few_shot_learning</a></b></td>
         <td>Interactive few-shot learning with multiple model types</td>
     </tr>
     <tr>

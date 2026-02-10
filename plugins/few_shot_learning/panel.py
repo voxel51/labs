@@ -4,10 +4,11 @@ import contextlib
 import hashlib
 import io
 import json
+import multiprocessing
 import uuid
 import numpy as np
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any, Literal, Optional
 
 import fiftyone as fo
 import fiftyone.zoo as foz
@@ -17,7 +18,8 @@ import fiftyone.operators.types as types
 from .models import get_model
 
 # Supported classification models for few-shot learning
-SUPPORTED_MODELS = [
+ModelName = Literal["RocchioPrototypeModel"]
+SUPPORTED_MODELS: list[ModelName] = [
     "RocchioPrototypeModel",
 ]
 
@@ -35,6 +37,34 @@ EMBEDDING_FIELD_DEFAULTS = {
     "CLIP (ViT-B/32)": "clip_vit_b32_embeddings",
     "DINOv2 (ViT-B/14)": "dinov2_vitb14_embeddings",
 }
+
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+def _safe_num_workers(requested: int) -> int:
+    """Return a safe ``num_workers`` value for :class:`DataLoader`.
+
+    In daemon processes (e.g. FiftyOne Teams operator workers) spawning
+    child processes is forbidden, so we fall back to ``0`` (in-process
+    loading).  Invalid inputs (``None``, negative, non-int) are
+    sanitised to ``0``.
+    """
+    try:
+        workers = max(0, int(requested))
+    except (TypeError, ValueError):
+        workers = 0
+
+    if workers > 0 and multiprocessing.current_process().daemon:
+        _logger.info(
+            "Running inside a daemon process — forcing "
+            "num_workers=0 (data loading may be slower)."
+        )
+        return 0
+
+    return workers
+
 
 EMBEDDING_DIMENSIONS = {
     "ResNet18": 512,
@@ -83,7 +113,7 @@ class FewShotSession:
     label_field: str = "fewshot_prediction"
 
     # Model configuration
-    model_name: str = "RocchioPrototypeModel"
+    model_name: ModelName = "RocchioPrototypeModel"
     model_hyperparams: dict[str, Any] = field(default_factory=dict)
 
     # DataLoader settings
@@ -168,12 +198,18 @@ class FewShotLearningPanel(foo.Panel):
                     )
                 except json.JSONDecodeError:
                     hyperparams = {}
+            raw_model_name = _get("model_name", "RocchioPrototypeModel")
+            model_name = (
+                raw_model_name
+                if raw_model_name in SUPPORTED_MODELS
+                else "RocchioPrototypeModel"
+            )
 
             return FewShotSession(
                 embedding_model=_get("embedding_model", "ResNet18"),
                 embedding_field=_get("embedding_field", "resnet18_embeddings"),
                 label_field=_get("label_field", "fewshot_prediction"),
-                model_name=_get("model_name", "RocchioPrototypeModel"),
+                model_name=model_name,
                 model_hyperparams=hyperparams,
                 batch_size=int(_get("batch_size", 16)),
                 num_workers=int(_get("num_workers", 8)),
@@ -199,25 +235,7 @@ class FewShotLearningPanel(foo.Panel):
 
     def _save_session(self, ctx: Any, session: FewShotSession) -> None:
         """Save session to panel state."""
-        ctx.panel.state.session = {
-            "embedding_model": session.embedding_model,
-            "embedding_field": session.embedding_field,
-            "label_field": session.label_field,
-            "model_name": session.model_name,
-            "model_hyperparams": session.model_hyperparams,
-            "batch_size": session.batch_size,
-            "num_workers": session.num_workers,
-            "skip_failures": session.skip_failures,
-            "positive_ids": session.positive_ids,
-            "negative_ids": session.negative_ids,
-            "iteration": session.iteration,
-            "train_positive_field": session.train_positive_field,
-            "train_negative_field": session.train_negative_field,
-            "working_subset_size": session.working_subset_size,
-            "randomize_subset": session.randomize_subset,
-            "subset_ids": session.subset_ids,
-            "subset_source_fingerprint": session.subset_source_fingerprint,
-        }
+        ctx.panel.state.session = asdict(session)
 
     def _clear_session(self, ctx: Any) -> None:
         """Clear session from panel state."""
@@ -338,7 +356,7 @@ class FewShotLearningPanel(foo.Panel):
                     model,
                     embeddings_field=field_name,
                     batch_size=32,
-                    num_workers=4,
+                    num_workers=_safe_num_workers(4),
                     skip_failures=True,
                 )
         except Exception as e:
@@ -612,7 +630,7 @@ class FewShotLearningPanel(foo.Panel):
 
         # Read model settings from UI (may have changed mid-session)
         ui_model_name = getattr(ctx.panel.state, "model_name", None)
-        if ui_model_name is not None:
+        if ui_model_name in SUPPORTED_MODELS:
             session.model_name = ui_model_name
         session.model_hyperparams = self._collect_hyperparams(
             ctx, session.model_name
@@ -712,7 +730,7 @@ class FewShotLearningPanel(foo.Panel):
         dataloader = DataLoader(
             torch_dataset,
             batch_size=session.batch_size,
-            num_workers=session.num_workers,
+            num_workers=_safe_num_workers(session.num_workers),
             collate_fn=collate_fn,
         )
 
