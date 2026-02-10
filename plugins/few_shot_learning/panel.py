@@ -56,10 +56,22 @@ def _safe_num_workers(requested: int) -> int:
     except (TypeError, ValueError):
         workers = 0
 
-    if workers > 0 and multiprocessing.current_process().daemon:
+    if workers == 0:
+        return 0
+
+    if multiprocessing.current_process().daemon:
         _logger.info(
             "Running inside a daemon process — forcing "
             "num_workers=0 (data loading may be slower)."
+        )
+        return 0
+
+    start_method = multiprocessing.get_start_method(allow_none=True)
+    if start_method and start_method != "fork":
+        _logger.info(
+            "Multiprocessing start method '%s' detected; "
+            "forcing num_workers=0 for DataLoader compatibility.",
+            start_method,
         )
         return 0
 
