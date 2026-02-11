@@ -292,7 +292,7 @@ export function ClickSegmentation() {
           </span>
           <input 
             type="text"
-            value={""}
+            value={segFieldName}
             onChange={(e) => setSegFieldName(e.target.value)}
             placeholder="Defaults to keypoint_field_seg if no input provided, e.g., user_clicks_seg"
             style={{
