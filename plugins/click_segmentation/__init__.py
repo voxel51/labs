@@ -4,6 +4,36 @@ from fiftyone.operators import types
 import fiftyone.zoo as foz
 
 
+class ComputeMetadata(foo.Operator):
+    @property
+    def config(self):
+        return foo.OperatorConfig(
+            name="compute_metadata",
+            label="Compute Metadata",
+            unlisted=True,
+        )
+
+    def resolve_input(self, ctx):
+        inputs = types.Object()
+        inputs.bool(
+            "overwrite", default=False, label="Overwrite", required=False
+        )
+        return types.Property(inputs)
+
+    def execute(self, ctx):
+        if not ctx.current_sample:
+            raise Exception("Operator expects an active Sample in the App.")
+        sample = ctx.dataset[ctx.current_sample]
+        overwrite = ctx.params.get("overwrite", False)
+        sample.compute_metadata(overwrite=overwrite)
+        sample.save()
+
+        ctx.ops.notify(
+            "Sample metadata computed. You may need to reload the Sample modal.",
+            variant="success",
+        )
+
+
 class SaveKeypoints(foo.Operator):
     @property
     def config(self):
@@ -21,7 +51,9 @@ class SaveKeypoints(foo.Operator):
             required=True,
             label="Keypoints",
         )
-        inputs.str("field_name", default="user_clicks", label="Field Name")
+        inputs.str(
+            "kpts_field_name", default="user_clicks", label="Field Name"
+        )
         inputs.str("label_name", default="label", label="Label Name")
         return types.Property(inputs)
 
@@ -30,7 +62,7 @@ class SaveKeypoints(foo.Operator):
             raise Exception("No sample is active in the App's Sample modal.")
         sample = ctx.dataset[ctx.current_sample]
         keypoints = ctx.params["keypoints"]
-        field_name = ctx.params["field_name"]
+        field_name = ctx.params["kpts_field_name"]
         label_name = ctx.params["label_name"]
 
         keypoint = fo.Keypoint(points=keypoints, label=label_name)
@@ -131,9 +163,16 @@ class SegmentWithPrompts(foo.Operator):
         else:
             target_view = ctx.target_view()
 
+        if not target_view.has_sample_field("metadata") or len(
+            target_view
+        ) != target_view.count("metadata"):
+            target_view.compute_metadata()
+
         prompt_field = ctx.params["prompt_field"]
         model_name = ctx.params["model_name"]
-        label_field = ctx.params.get("label_field", prompt_field + "_seg")
+        label_field = (
+            ctx.params.get("label_field", None) or prompt_field + "_seg"
+        )
         batch_size = ctx.params.get("batch_size", None)
         num_workers = ctx.params.get("num_workers", None)
         skip_failures = ctx.params.get("skip_failures", True)
@@ -159,5 +198,6 @@ class SegmentWithPrompts(foo.Operator):
 
 
 def register(p):
+    p.register(ComputeMetadata)
     p.register(SaveKeypoints)
     p.register(SegmentWithPrompts)

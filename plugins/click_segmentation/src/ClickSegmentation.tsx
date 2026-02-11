@@ -13,12 +13,28 @@ export function ClickSegmentation() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSingleClick, setSingleClick] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [fieldName, setFieldName] = useState("user_clicks");
+  const [keypointFieldName, setKeypointFieldName] = useState("user_clicks");
+  const [segFieldName, setSegFieldName] = useState("");
   const [modelName, setModelName] = useState("segment-anything-2-hiera-tiny-image-torch");
   const [labelName, setLabelName] = useState("label");
 
   useEffect(() => {
     setClicks([]);
+  }, [modalSample?.sample?._id]);
+
+  useEffect(() => {
+    if (!modalSample) return;
+    const metadata = modalSample.sample.metadata;
+  
+    if (!metadata || !metadata.width || !metadata.height) {
+      console.log("Sample metadata not available. Computing metadata");
+      
+      executeOperator(
+        "@51labs/click_segmentation/compute_metadata", {}
+      ).catch((error) => {
+        console.error("Failed to compute metadata:", error);
+      });
+    }
   }, [modalSample?.sample?._id]);
 
   useEffect(() => {
@@ -31,12 +47,11 @@ export function ClickSegmentation() {
 
       const rect = canvas.getBoundingClientRect();
       const metadata = modalSample.sample.metadata;
-    
-      if (!metadata?.width || !metadata?.height) {
-        console.error("No image metadata available");
-        return;
-      }
 
+      if (!metadata || !metadata.width || !metadata.height) {
+        alert("Sample metadata not yet available. Reload/refresh the sample modal.");
+        return
+      }
       // Calculate the relative position of the click
       // NOTE: Sample modal displays the image in contain mode filling one dimension while keeping the aspect
       // ratio. It is possible to zoom in and out in the model which will break the correct image coord capture.
@@ -45,7 +60,7 @@ export function ClickSegmentation() {
       const canvasAspect = rect.width / rect.height;
     
       let imgWidth, imgHeight, imgOffsetX, imgOffsetY;
-    
+
       if (imageAspect > canvasAspect) {
         // Image fills width only
         imgWidth = rect.width;
@@ -71,7 +86,7 @@ export function ClickSegmentation() {
       }
     
       const normalizedX = imgX / imgWidth;
-      const normalizedY = imgY / imgHeight;    
+      const normalizedY = imgY / imgHeight;
       const clickData = {
         normalizedX: parseFloat(normalizedX.toFixed(4)),
         normalizedY: parseFloat(normalizedY.toFixed(4)),
@@ -87,10 +102,11 @@ export function ClickSegmentation() {
 
     document.addEventListener("click", handleCanvasClick, true);
     return () => document.removeEventListener("click", handleCanvasClick, true);
-  }, [isCapturing, modalSample, isSingleClick, isProcessing, modelName, fieldName]);
+  }, [isCapturing, modalSample, isSingleClick, isProcessing, modelName, keypointFieldName]);
 
   const saveAsKeypoints = async () => {
-    if (!fieldName.trim()) {
+    setIsProcessing(true);
+    if (!keypointFieldName.trim()) {
       alert("Please enter a field name");
       return;
     }
@@ -105,7 +121,7 @@ export function ClickSegmentation() {
         "@51labs/click_segmentation/save_keypoints",
         {
           keypoints: keypointCoords,
-          field_name: fieldName.trim(),
+          kpts_field_name: keypointFieldName.trim(),
           label_name: labelName.trim()
         }
       );
@@ -113,6 +129,10 @@ export function ClickSegmentation() {
     } catch (error) {
       console.error("Error saving keypoints:", error);
       alert(`Failed: ${error.message}`);
+    } finally {
+      if (!isSingleClick){
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -126,7 +146,7 @@ export function ClickSegmentation() {
         "@51labs/click_segmentation/save_keypoints",
         {
           keypoints: keypointCoords,
-          field_name: fieldName.trim(),
+          kpts_field_name: keypointFieldName.trim(),
           label_name: labelName.trim()
         }
       );
@@ -136,8 +156,9 @@ export function ClickSegmentation() {
       await executeOperator(
         "@51labs/click_segmentation/segment_with_prompts",
         {
-          prompt_field: fieldName.trim(),
-          model_name: modelName.trim()
+          prompt_field: keypointFieldName.trim(),
+          model_name: modelName.trim(),
+          label_field: segFieldName.trim()
         }
       );
       setClicks([])
@@ -150,17 +171,21 @@ export function ClickSegmentation() {
   };
 
   const segmentWithKeypoints = async () => {
+    setIsProcessing(true);
     try {
       await executeOperator(
         "@51labs/click_segmentation/segment_with_prompts",
         {
-          prompt_field: fieldName.trim(),
-          model_name: modelName.trim()
+          prompt_field: keypointFieldName.trim(),
+          model_name: modelName.trim(),
+          label_field: segFieldName.trim()
         }
       );
     } catch (error) {
       console.error("Error saving keypoints:", error);
       alert(`Failed: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -173,7 +198,7 @@ export function ClickSegmentation() {
       <div style={{ marginBottom: "10px" }}>
         <h3 style={{ margin: 0 }}>Image segmentation via point prompts</h3>
       </div>
-      
+
       {/* Capture toggle on/off*/}
       <div style={{ 
         marginBottom: "20px",
@@ -221,7 +246,7 @@ export function ClickSegmentation() {
         )}
       </div>
 
-      {/* Field name input */}
+      {/* Keypoint field name input */}
       <div style={{ 
         marginBottom: "8px", 
         padding: "4px",
@@ -237,9 +262,39 @@ export function ClickSegmentation() {
           </span>
           <input 
             type="text"
-            value={fieldName}
-            onChange={(e) => setFieldName(e.target.value)}
+            value={keypointFieldName}
+            onChange={(e) => setKeypointFieldName(e.target.value)}
             placeholder="e.g., user_clicks, keypoints"
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              fontSize: "14px",
+              fontFamily: "monospace"
+            }}
+          />
+        </label>
+      </div>
+
+      {/* Segmentation field name input */}
+      <div style={{
+        marginBottom: "8px",
+        padding: "4px",
+      }}>
+        <label style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          fontSize: "14px"
+        }}>
+          <span style={{ fontSize: "14px", color: "#666" }}>
+            Sample field name for saving segmentation masks
+          </span>
+          <input 
+            type="text"
+            value={""}
+            onChange={(e) => setSegFieldName(e.target.value)}
+            placeholder="Set to {keypoint_field}_seg if no input provided"
             style={{
               padding: "8px 12px",
               border: "1px solid #ccc",
@@ -258,7 +313,7 @@ export function ClickSegmentation() {
       }}>
         <label style={{ 
           display: "flex", 
-          flexDirection: "column", 
+          flexDirection: "column",
           gap: "8px",
           fontSize: "14px"
         }}>
@@ -298,7 +353,7 @@ export function ClickSegmentation() {
           gap: "10px", 
           cursor: "pointer" 
         }}>
-          <input 
+          <input
             type="checkbox"
             checked={isSingleClick}
             onChange={(e) => setSingleClick(e.target.checked)}
@@ -332,7 +387,7 @@ export function ClickSegmentation() {
       <div style={{ marginBottom: "10px", display: "flex", gap: "10px" }}>
       <button 
           onClick={saveAsKeypoints}
-          disabled={(isSingleClick) || (clicks.length === 0)}
+          disabled={(isSingleClick) || (clicks.length === 0) || (isProcessing)}
           style={{
             padding: "8px 16px",
             backgroundColor: (!isSingleClick) && (clicks.length > 0) ? "#2196F3" : "#ccc",
@@ -350,11 +405,11 @@ export function ClickSegmentation() {
           disabled={(isSingleClick) || (clicks.length === 0)}
           style={{
             padding: "8px 16px",
-            backgroundColor: (!isSingleClick) || (clicks.length > 0) ? "#2196F3" : "#ccc",
+            backgroundColor: (!isSingleClick && !isProcessing) || (clicks.length > 0) ? "#2196F3" : "#ccc",
             color: "white",
             border: "none",
             borderRadius: "4px",
-            cursor: (!isSingleClick) && (clicks.length > 0) ? "pointer" : "not-allowed",
+            cursor: (!isSingleClick && !isProcessing) && (clicks.length > 0) ? "pointer" : "not-allowed",
           }}
         >
           Clear Clicks ({clicks.length})
@@ -395,14 +450,14 @@ export function ClickSegmentation() {
       <div style={{ marginBottom: "10px", display: "flex", gap: "10px" }}>
         <button 
           onClick={segmentWithKeypoints}
-          disabled={isSingleClick}
+          disabled={isSingleClick || isProcessing}
           style={{
             padding: "8px 16px",
-            backgroundColor: (!isSingleClick) ? "#2196F3" : "#ccc",
+            backgroundColor: (!isSingleClick) && (!isProcessing) ? "#2196F3" : "#ccc",
             color: "white",
             border: "none",
             borderRadius: "4px",
-            cursor: (!isSingleClick) ? "pointer" : "not-allowed",
+            cursor: (!isSingleClick) && (!isProcessing) ? "pointer" : "not-allowed",
             fontWeight: "bold"
           }}
         >
