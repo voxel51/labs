@@ -4,11 +4,23 @@ Image segmentation via point prompts is a `fiftyone-labs` features that lets use
 
 1. The `click_segmentation` panel is an interactive tool for generating point prompts via clicks on the `Sample` modal. These point prompts can be input to a promptable segmentation model (such as Segment Anything Model) to create segmentation masks.
 
-2. The `segment_wit_prompts` operator is a standalone operator that can be used to run a promptable segmentation model with either box or keypoint prompts saved in a sample field. The operator may be applied to the entire dataset or a subset of the dataset.
+2. The `segment_with_prompts` operator is a standalone operator that can be used to run a promptable segmentation model with either box or keypoint prompts saved in a sample field. The operator may be applied to the entire dataset or a subset of the dataset.
 
 ## Usage
 
 ### Click To Segment Panel
+
+```python
+import fiftyone.zoo as foz
+import fiftyone as fo
+
+dataset = foz.load_zoo_dataset("quickstart")
+# For a smoother experience, ensure that samples have metadata.
+if dataset.count("metadata") != len(dataset):
+    dataset.compute_metadata()
+
+session = fo.launch_app(dataset)
+```
 
 _Select a sample and open Click To Segment panel_
 

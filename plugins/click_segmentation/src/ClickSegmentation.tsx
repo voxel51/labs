@@ -294,7 +294,7 @@ export function ClickSegmentation() {
             type="text"
             value={""}
             onChange={(e) => setSegFieldName(e.target.value)}
-            placeholder="Set to {keypoint_field}_seg if no input provided"
+            placeholder="Defaults to keypoint_field_seg if no input provided, e.g., user_clicks_seg"
             style={{
               padding: "8px 12px",
               border: "1px solid #ccc",
