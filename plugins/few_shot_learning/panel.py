@@ -463,9 +463,11 @@ class FewShotLearningPanel(foo.Panel):
 
         source = ctx.view
 
-        # No subset limit
+        # No subset limit — materialize to ID-based select so the view
+        # is stable even if it was lazily filtered on a field we mutate.
         if session.working_subset_size <= 0:
-            return source, len(source)
+            ids = source.values("id")
+            return ctx.dataset.select(ids), len(ids)
 
         # Labeled IDs always included
         labeled_ids = set(session.positive_ids + session.negative_ids)
@@ -681,9 +683,13 @@ class FewShotLearningPanel(foo.Panel):
         model = get_model(session.model_name, session.model_hyperparams)
 
         # Ensure embeddings for labeled samples and inference view
-        zoo_model_name = EMBEDDING_ZOO_MODELS.get(
-            session.embedding_model, "resnet18-imagenet-torch"
-        )
+        if session.embedding_model not in EMBEDDING_ZOO_MODELS:
+            ctx.ops.notify(
+                f"Unknown embedding model: {session.embedding_model}",
+                variant="error",
+            )
+            return
+        zoo_model_name = EMBEDDING_ZOO_MODELS[session.embedding_model]
         computed = 0
 
         labeled_ids = session.positive_ids + session.negative_ids
@@ -694,13 +700,12 @@ class FewShotLearningPanel(foo.Panel):
             )
 
         # Get inference view (possibly subset).
-        # Materialize to ID-based select so the view is stable
-        # (ctx.view may be lazily filtered on the prediction field
-        # which we clear to None for in-scope samples before writing).
+        # _get_inference_view always returns an ID-materialized view,
+        # so it is stable even if ctx.view is lazily filtered on a
+        # field we mutate during prediction.
         inference_view, inference_count = self._get_inference_view(
             ctx, session
         )
-        inference_view = ctx.dataset.select(inference_view.values("id"))
         computed += self._ensure_embeddings(
             ctx, inference_view, session.embedding_field, zoo_model_name
         )
