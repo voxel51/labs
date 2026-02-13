@@ -40,8 +40,6 @@ export function ClickSegmentation() {
     const handleCanvasClick = async (event: MouseEvent) => {
       const canvas = event.target as HTMLCanvasElement;
       if (canvas.tagName !== "CANVAS") return;
-      event.stopPropagation();
-      event.preventDefault();
 
       const rect = canvas.getBoundingClientRect();
       const metadata = modalSample.sample.metadata;
@@ -134,6 +132,7 @@ export function ClickSegmentation() {
         kpts_field_name: keypointFieldName.trim(),
         label_name: labelName.trim(),
       });
+      await executeOperator("reload_dataset");
     } catch (error) {
       console.error("Error saving keypoints:", error);
       alert(`Failed: ${error.message}`);

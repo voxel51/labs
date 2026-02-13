@@ -90,7 +90,6 @@ class SaveKeypoints(foo.Operator):
         else:
             sample[field_name] = fo.Keypoints(keypoints=[keypoint])
         sample.save()
-        sample.reload()
 
 
 class SegmentWithPrompts(foo.Operator):
