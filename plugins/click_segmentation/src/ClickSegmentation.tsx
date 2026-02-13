@@ -150,6 +150,9 @@ export function ClickSegmentation() {
         kpts_field_name: keypointFieldName.trim(),
         label_name: labelName.trim(),
       });
+      // Add a delay to ensure keypoints are available
+      // TODO: Remove delay. Find a better fix.
+      await new Promise((resolve) => setTimeout(resolve, 10));
       await executeOperator("@51labs/click_segmentation/segment_with_prompts", {
         prompt_field: keypointFieldName.trim(),
         model_name: modelName.trim(),
