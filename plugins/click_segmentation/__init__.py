@@ -1,3 +1,4 @@
+from itertools import chain
 import fiftyone as fo
 import fiftyone.operators as foo
 from fiftyone.operators import types
@@ -68,9 +69,10 @@ class SaveKeypoints(foo.Operator):
             raise Exception("No sample is active in the App's Sample modal.")
         sample = ctx.dataset[ctx.current_sample]
         keypoints = ctx.params["keypoints"]
-        keypoint_labels = ctx.params.get("keypoint_labels", None)
-        if keypoint_labels:
-            keypoint_labels = [l[0] for l in keypoint_labels]
+        keypoint_labels = ctx.params.get("keypoint_labels", [])
+        keypoint_labels = keypoint_labels if len(keypoint_labels) else None
+        if keypoint_labels is not None:
+            keypoint_labels = list(chain.from_iterable(keypoint_labels))
         field_name = ctx.params["kpts_field_name"]
         label_name = ctx.params["label_name"]
 
@@ -83,7 +85,7 @@ class SaveKeypoints(foo.Operator):
         if sample.has_field(field_name) and sample[field_name] is not None:
             num_kpts = len(sample[field_name].keypoints)
             ctx.ops.notify(
-                f"Appending keypoints to {field_name} with {num_kpts} existing keypoint(s).",
+                f"Appending keypoints to {field_name} with {num_kpts} existing qqkeypoint(s).",
                 variant="warning",
             )
             sample[field_name].keypoints.append(keypoint)
@@ -193,7 +195,7 @@ class SegmentWithPrompts(foo.Operator):
             ctx.ops.notify(
                 f"Prompt field {prompt_field} doesn't exist.", variant="error"
             )
-            return
+            raise IOError(f"Prompt field {prompt_field} doesn't exist.")
 
         model = self._get_or_load_model(model_name)
 

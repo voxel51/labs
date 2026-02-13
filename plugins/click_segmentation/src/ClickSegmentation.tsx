@@ -197,7 +197,9 @@ export function ClickSegmentation() {
     marker.style.transform = "translate(-50%, -50%)";
     marker.style.pointerEvents = "none";
     marker.style.zIndex = "99999";
-    marker.style.boxShadow = "0 0 10px rgba(255,0,0,0.8)";
+    marker.style.boxShadow = isNegativeClick
+      ? "0 0 10px rgba(29,161,14,0.8)"
+      : "0 0 10px rgba(255,0,0,0.8)";
 
     document.body.appendChild(marker);
     markersRef.current.push(marker);
