@@ -85,7 +85,7 @@ class SaveKeypoints(foo.Operator):
         if sample.has_field(field_name) and sample[field_name] is not None:
             num_kpts = len(sample[field_name].keypoints)
             ctx.ops.notify(
-                f"Appending keypoints to {field_name} with {num_kpts} existing qqkeypoint(s).",
+                f"Appending keypoints to {field_name} with {num_kpts} existing keypoint(s).",
                 variant="warning",
             )
             sample[field_name].keypoints.append(keypoint)
