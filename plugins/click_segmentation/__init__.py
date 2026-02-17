@@ -1,3 +1,4 @@
+from itertools import chain
 import fiftyone as fo
 import fiftyone.operators as foo
 from fiftyone.operators import types
@@ -49,7 +50,13 @@ class SaveKeypoints(foo.Operator):
             "keypoints",
             types.List(types.Number()),
             required=True,
-            label="Keypoints",
+            label="Keypoint Coordinates",
+        )
+        inputs.list(
+            "keypoint_labels",
+            types.List(types.Number()),
+            required=False,
+            label="Keypoint Labels (pos/neg)",
         )
         inputs.str(
             "kpts_field_name", default="user_clicks", label="Field Name"
@@ -62,10 +69,18 @@ class SaveKeypoints(foo.Operator):
             raise Exception("No sample is active in the App's Sample modal.")
         sample = ctx.dataset[ctx.current_sample]
         keypoints = ctx.params["keypoints"]
+        keypoint_labels = ctx.params.get("keypoint_labels", [])
+        keypoint_labels = keypoint_labels if len(keypoint_labels) else None
+        if keypoint_labels is not None:
+            keypoint_labels = list(chain.from_iterable(keypoint_labels))
         field_name = ctx.params["kpts_field_name"]
         label_name = ctx.params["label_name"]
 
-        keypoint = fo.Keypoint(points=keypoints, label=label_name)
+        keypoint = fo.Keypoint(
+            points=keypoints,
+            label=label_name,
+            sam_labels=keypoint_labels,
+        )
 
         if sample.has_field(field_name) and sample[field_name] is not None:
             num_kpts = len(sample[field_name].keypoints)
@@ -77,7 +92,6 @@ class SaveKeypoints(foo.Operator):
         else:
             sample[field_name] = fo.Keypoints(keypoints=[keypoint])
         sample.save()
-        sample.reload()
 
 
 class SegmentWithPrompts(foo.Operator):
@@ -175,9 +189,16 @@ class SegmentWithPrompts(foo.Operator):
         )
         batch_size = ctx.params.get("batch_size", None)
         num_workers = ctx.params.get("num_workers", None)
-        skip_failures = ctx.params.get("skip_failures", True)
+        skip_failures = ctx.params.get("skip_failures", False)
+
+        if not target_view.has_sample_field(prompt_field):
+            ctx.ops.notify(
+                f"Prompt field {prompt_field} doesn't exist.", variant="error"
+            )
+            raise IOError(f"Prompt field {prompt_field} doesn't exist.")
 
         model = self._get_or_load_model(model_name)
+
         target_view.apply_model(
             model,
             label_field=label_field,
