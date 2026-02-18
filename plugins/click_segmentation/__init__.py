@@ -1,4 +1,6 @@
 from itertools import chain
+from packaging.version import Version
+
 import fiftyone as fo
 import fiftyone.operators as foo
 from fiftyone.operators import types
@@ -62,12 +64,20 @@ class SaveKeypoints(foo.Operator):
             "kpts_field_name", default="user_clicks", label="Field Name"
         )
         inputs.str("label_name", default="label", label="Label Name")
+        inputs.bool(
+            "overwrite",
+            label="Overwrite",
+            default=False,
+            required=False,
+        )
         return types.Property(inputs)
 
     def execute(self, ctx):
         if not ctx.current_sample:
             raise Exception("No sample is active in the App's Sample modal.")
+
         sample = ctx.dataset[ctx.current_sample]
+        overwrite = ctx.params["overwrite"]
         keypoints = ctx.params["keypoints"]
         keypoint_labels = ctx.params.get("keypoint_labels", [])
         keypoint_labels = keypoint_labels if len(keypoint_labels) else None
@@ -76,13 +86,31 @@ class SaveKeypoints(foo.Operator):
         field_name = ctx.params["kpts_field_name"]
         label_name = ctx.params["label_name"]
 
+        # NOTE: Negative prompting requires https://github.com/voxel51/fiftyone/pull/6941
+        # If fix is not available, raise a warning and remove negative prompts
+        remove_neg_pts = False
+        if Version(fo.constants.VERSION) < Version("1.14.0"):
+            remove_neg_pts = True
+        elif hasattr(fo.constants, "TEAM_VERSION"):
+            if Version(fo.constants.TEAM_VERSION) < Version("2.17.0"):
+                remove_neg_pts = True
+        if remove_neg_pts and keypoint_labels:
+            keypoints = [
+                kpt for kpt, lbl in zip(keypoints, keypoint_labels) if lbl != 0
+            ]
+            keypoint_labels = None
+
         keypoint = fo.Keypoint(
             points=keypoints,
             label=label_name,
             sam_labels=keypoint_labels,
         )
 
-        if sample.has_field(field_name) and sample[field_name] is not None:
+        if (
+            not overwrite
+            and sample.has_field(field_name)
+            and sample[field_name] is not None
+        ):
             num_kpts = len(sample[field_name].keypoints)
             ctx.ops.notify(
                 f"Appending keypoints to {field_name} with {num_kpts} existing keypoint(s).",
@@ -107,7 +135,7 @@ class SegmentWithPrompts(foo.Operator):
             dark_icon="/assets/icon-dark.svg",
             allow_delegated_execution=True,
             allow_immediate_execution=True,
-            default_choice_to_delegated=False,
+            default_choice_to_delegated=True,
             allow_distributed_execution=True,
         )
 
@@ -138,7 +166,6 @@ class SegmentWithPrompts(foo.Operator):
             label="Batch Size",
             description=("A batch size to use for segmentation"),
             required=False,
-            default=1,
         )
 
         inputs.int(
@@ -158,6 +185,18 @@ class SegmentWithPrompts(foo.Operator):
                 "Whether to gracefully continue without raising an error if "
                 "prediction cannot be generated for a sample"
             ),
+            default=False,
+            required=False,
+        )
+
+        inputs.bool(
+            "overwrite",
+            label="Overwrite",
+            description=(
+                "Whether to overwrite existing segmentations in Segmentation Label Field"
+                "with prompt generated segmentations or append them"
+            ),
+            default=True,
             required=False,
         )
 
@@ -190,12 +229,26 @@ class SegmentWithPrompts(foo.Operator):
         batch_size = ctx.params.get("batch_size", None)
         num_workers = ctx.params.get("num_workers", None)
         skip_failures = ctx.params.get("skip_failures", False)
+        overwrite = ctx.params.get("overwrite", True)
+
+        if overwrite and target_view.has_sample_field(label_field):
+            ctx.ops.notify(
+                f"All existing values in {label_field} will be overwritten.",
+                variant="warning",
+            )
 
         if not target_view.has_sample_field(prompt_field):
             ctx.ops.notify(
                 f"Prompt field {prompt_field} doesn't exist.", variant="error"
             )
             raise IOError(f"Prompt field {prompt_field} doesn't exist.")
+
+        has_existing_det = False
+        if not overwrite and target_view.has_sample_field(label_field):
+            existing_det = target_view.values(
+                f"{label_field}.detections", unwind=False
+            )
+            has_existing_det = any(e is not None for e in existing_det)
 
         model = self._get_or_load_model(model_name)
 
@@ -207,7 +260,21 @@ class SegmentWithPrompts(foo.Operator):
             num_workers=num_workers,
             skip_failures=skip_failures,
         )
-        target_view.save()
+
+        if not overwrite and has_existing_det:
+            new_det = target_view.values(
+                f"{label_field}.detections", unwind=False
+            )
+            merged = []
+            for edet, ndet in zip(existing_det, new_det):
+                det = None
+                if edet:
+                    det = fo.Detections(detections=edet)
+                if ndet:
+                    det.detections.extend(edet)
+                merged.append(det)
+            target_view.set_values(label_field, merged)
+            target_view.save()
 
         ctx.ops.notify(
             f"Segmentation for prompts in {prompt_field} saved to {label_field}",

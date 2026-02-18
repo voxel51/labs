@@ -4,11 +4,14 @@ import _ from "lodash";
 import { useRecoilValue } from "recoil";
 import styled from "styled-components";
 import { useState, useRef, useCallback, useEffect } from "react";
+import Overview from "../../../../fiftyone/app/packages/core/src/plugins/SchemaIO/components/NativeModelEvaluationView/Overview";
 
 export function ClickSegmentation() {
   const modalSample = useRecoilValue(fos.modalSample);
   const [clicks, setClicks] = useState([]);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isAppending, setIsAppending] = useState(false);
+  const [overwriteSeg, setOverwriteSeg] = useState(false);
   const [isNegativeClick, setIsNegativeClick] = useState(false);
   const [isSingleClick, setSingleClick] = useState(false);
   const [keypointFieldName, setKeypointFieldName] = useState("user_clicks");
@@ -131,6 +134,7 @@ export function ClickSegmentation() {
         keypoint_labels: keypointLabels,
         kpts_field_name: keypointFieldName.trim(),
         label_name: labelName.trim(),
+        overwrite: isAppending ? false : true,
       });
       await executeOperator("reload_dataset");
     } catch (error) {
@@ -138,6 +142,17 @@ export function ClickSegmentation() {
       alert(`Failed: ${error.message}`);
     } finally {
       clearClicks();
+      if (!isAppending) {
+        await executeOperator(
+          "@51labs/click_segmentation/segment_with_prompts",
+          {
+            prompt_field: keypointFieldName.trim(),
+            model_name: modelName.trim(),
+            label_field: segFieldName.trim(),
+            overwrite: false,
+          }
+        );
+      }
     }
   };
 
@@ -149,6 +164,7 @@ export function ClickSegmentation() {
         keypoints: keypointCoords,
         kpts_field_name: keypointFieldName.trim(),
         label_name: labelName.trim(),
+        overwrite: true,
       });
       // Add a delay to ensure keypoints are available
       // TODO: Remove delay. Find a better fix.
@@ -157,6 +173,7 @@ export function ClickSegmentation() {
         prompt_field: keypointFieldName.trim(),
         model_name: modelName.trim(),
         label_field: segFieldName.trim(),
+        overwrite: false,
       });
       setClicks([]);
     } catch (error) {
@@ -176,6 +193,7 @@ export function ClickSegmentation() {
         prompt_field: keypointFieldName.trim(),
         model_name: modelName.trim(),
         label_field: segFieldName.trim(),
+        overwrite: overwriteSeg ? true : false,
       });
     } catch (error) {
       console.error("Error saving keypoints:", error);
@@ -288,12 +306,12 @@ export function ClickSegmentation() {
               fontWeight: "500",
             }}
           >
-            Click anywhere on the modal image to capture keypoints.
+            Click anywhere on the modal image to capture points.
           </p>
         )}
       </div>
 
-      {/* Keypoint field name input */}
+      {/* Keypoints field name input */}
       <div
         style={{
           marginBottom: "8px",
@@ -423,6 +441,79 @@ export function ClickSegmentation() {
         )}
       </div>
 
+      {/* Append keypoint toggle on/off */}
+      <div
+        style={{
+          marginBottom: "20px",
+          display: "flex",
+          flexDirection: "column",
+          padding: "15px",
+          backgroundColor: isNegativeClick ? "#fdf0e3" : "#f5f5f5",
+          borderRadius: "8px",
+          border: `2px solid ${isNegativeClick ? "#f36b21" : "#ddd"}`,
+          transition: "all 0.3s ease",
+        }}
+      >
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isAppending}
+            onChange={(e) => {
+              setSingleClick(false);
+              setIsAppending(e.target.checked);
+            }}
+            disabled={!isCapturing}
+            style={{
+              width: "20px",
+              height: "20px",
+              cursor: isCapturing ? "pointer" : "not-allowed",
+            }}
+          />
+          <span
+            style={{
+              fontWeight: "bold",
+              fontSize: "15px",
+              color: isAppending ? "#d26319" : "#666",
+            }}
+          >
+            {isAppending ? "Append Mode Enabled" : "Enable Append Mode"}
+          </span>
+        </label>
+        {isCapturing && isAppending && (
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#d26319",
+              margin: "8px 0 0 30px",
+              fontWeight: "500",
+            }}
+          >
+            Active clicks will be appended to Keypoints sample field as a new
+            set of clicks.
+          </p>
+        )}
+        {!isAppending && (
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#666",
+              margin: "8px 0 0 30px",
+              fontWeight: "500",
+            }}
+          >
+            When not appending, active clicks overwrite any existing Keypoints
+            in the sample field and segmentation is auto-triggered.
+          </p>
+        )}
+      </div>
+
       {/* Keypoint buttons */}
       <div style={{ marginBottom: "10px", display: "flex", gap: "10px" }}>
         <button
@@ -495,6 +586,7 @@ export function ClickSegmentation() {
             onChange={(e) => {
               setSingleClick(e.target.checked);
               setIsNegativeClick(false);
+              setIsAppending(false);
             }}
             disabled={!isCapturing}
             style={{
@@ -615,6 +707,24 @@ export function ClickSegmentation() {
         >
           Segment with keypoints
         </button>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            fontSize: "13px",
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={overwriteSeg}
+            onChange={(e) => setOverwriteSeg(e.target.checked)}
+            style={{ cursor: "pointer" }}
+          />
+          Overwrite segmentations on SegmentWithKeypoints
+        </label>
       </div>
     </div>
   );
