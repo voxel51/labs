@@ -1,0 +1,156 @@
+name: Plugin Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            template:
+              - 'plugins/template/**'
+            few_shot_learning:
+              - 'plugins/few_shot_learning/**'
+            cv_full_docker:
+              - '.github/workflows/Dockerfile-teams-cv-full-copy-temp'
+              - '.github/workflows/dockerfile-requirements.txt'
+
+      - id: set-matrix
+        env:
+          FILTER_template: ${{ steps.filter.outputs.template }}
+          FILTER_few_shot_learning: ${{ steps.filter.outputs.few_shot_learning }}
+          FILTER_cv_full_docker: ${{ steps.filter.outputs.cv_full_docker }}
+        run: |
+          # Master list: add plugin here
+          # also add to path filter above (plugins/<name>/**) and FILTER_<name> in env
+          ALL_PLUGINS=(template few_shot_learning)
+          INTENSIVE_PLUGINS=()
+
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            INTENSIVE_PLUGINS=("${ALL_PLUGINS[@]}")
+          else
+            for p in "${ALL_PLUGINS[@]}"; do
+              v="FILTER_$p"
+              [ "$(eval echo \${$v})" = "true" ] && INTENSIVE_PLUGINS+=("$p")
+            done
+          fi
+
+          DEPS_PLUGINS=()
+          for p in "${ALL_PLUGINS[@]}"; do
+            [ -f "plugins/$p/requirements.txt" ] && DEPS_PLUGINS+=("$p")
+          done
+
+          MATRIX="[]"
+          for p in "${ALL_PLUGINS[@]}"; do
+            MATRIX=$(echo "$MATRIX" | jq -c --arg plugin "$p" '. + [{"plugin": $plugin, "suite": "regular"}]')
+          done
+          for p in "${INTENSIVE_PLUGINS[@]}"; do
+            MATRIX=$(echo "$MATRIX" | jq -c --arg plugin "$p" '. + [{"plugin": $plugin, "suite": "intensive"}]')
+          done
+          for p in "${DEPS_PLUGINS[@]}"; do
+            MATRIX=$(echo "$MATRIX" | jq -c --arg plugin "$p" '. + [{"plugin": $plugin, "suite": "dependencies"}]')
+          done
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "$FILTER_cv_full_docker" = "true" ]; then
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"plugin": "template", "suite": "build-cv-full-docker"}]')
+          fi
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "$MATRIX" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  test:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        if: matrix.suite == 'build-cv-full-docker'
+        uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          token_format: "access_token"
+          workload_identity_provider: ${{ secrets.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+
+      - name: Set up Python environment
+        if: matrix.suite != 'build-cv-full-docker'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install FiftyOne
+        if: matrix.suite != 'build-cv-full-docker'
+        run: |
+          pip install fiftyone
+
+      - name: Install test dependencies
+        if: matrix.suite != 'build-cv-full-docker'
+        run: |
+          pip install pytest pytest-cov pytest-xdist
+          if [ -f "plugins/${{ matrix.plugin }}/requirements.txt" ]; then
+            pip install -r plugins/${{ matrix.plugin }}/requirements.txt
+          fi
+
+      - name: Run regular tests
+        if: matrix.suite == 'regular'
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          if [ -d "tests" ]; then
+            export PYTHONPATH="${GITHUB_WORKSPACE}/plugins:${PYTHONPATH}"
+            pytest tests/ --ignore=tests/intensive -v --tb=short --cov=. --cov-report=xml --cov-report=term
+          else
+            echo "No tests directory found for plugin ${{ matrix.plugin }}"
+            exit 0
+          fi
+
+      - name: Run intensive tests
+        if: matrix.suite == 'intensive'
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          if [ -d "tests/intensive" ]; then
+            export PYTHONPATH="${GITHUB_WORKSPACE}/plugins:${PYTHONPATH}"
+            export FIFTYONE_PLUGINS_DIR="${GITHUB_WORKSPACE}/plugins"
+            pytest tests/intensive/ -v --tb=short
+          else
+            echo "No tests/intensive directory found for plugin ${{ matrix.plugin }}, skipping"
+            exit 0
+          fi
+
+      - name: Set up Docker Buildx
+        if: matrix.suite == 'build-cv-full-docker'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CV full image (no push)
+        if: matrix.suite == 'build-cv-full-docker'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/workflows/Dockerfile-teams-cv-full-copy-temp
+          push: false
+          tags: labs/cv-full:build
+          secrets: |
+            GCLOUD_TOKEN=${{ steps.auth.outputs.access_token }}
