@@ -1,0 +1,9 @@
+name: "@51labs/template"
+description: Template plugin for testing CI infrastructure
+version: 1.0.0
+fiftyone:
+  version: "*"
+url: https://github.com/voxel51/labs/tree/main/plugins/template
+license: Apache 2.0
+operators:
+  - template_operator
