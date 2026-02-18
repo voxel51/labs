@@ -41,6 +41,7 @@
     "vite-plugin-externalize-deps": "^0.8.0"
   },
   "resolutions": {
+    "@fiftyone/commands": "portal:../../../fiftyone/app/packages/commands",
     "@fiftyone/utilities": "portal:../../../fiftyone/app/packages/utilities",
     "@fiftyone/state": "portal:../../../fiftyone/app/packages/state",
     "@fiftyone/looker": "portal:../../../fiftyone/app/packages/looker",
