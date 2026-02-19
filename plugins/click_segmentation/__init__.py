@@ -107,7 +107,7 @@ class SegmentWithPrompts(foo.Operator):
             dark_icon="/assets/icon-dark.svg",
             allow_delegated_execution=True,
             allow_immediate_execution=True,
-            default_choice_to_delegated=False,
+            default_choice_to_delegated=True,
             allow_distributed_execution=True,
         )
 
