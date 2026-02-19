@@ -88,7 +88,7 @@ class SaveKeypoints(foo.Operator):
                 remove_neg_pts = True
         if remove_neg_pts and keypoint_labels:
             ctx.ops.notify(
-                "Negative prompting not available with installed fiftyone version. Removing negative points.",
+                "Negative prompting not available with the installed fiftyone version. Removing negative points.",
                 variant="warning",
             )
             keypoints = [
