@@ -1,4 +1,6 @@
 from itertools import chain
+from packaging.version import Version
+
 import fiftyone as fo
 import fiftyone.operators as foo
 from fiftyone.operators import types
@@ -76,11 +78,30 @@ class SaveKeypoints(foo.Operator):
         field_name = ctx.params["kpts_field_name"]
         label_name = ctx.params["label_name"]
 
+        # NOTE: Negative prompting requires https://github.com/voxel51/fiftyone/pull/6941
+        # If fix is not available, raise a warning and remove negative prompts
+        remove_neg_pts = False
+        if Version(fo.constants.VERSION) < Version("1.14.0"):
+            remove_neg_pts = True
+        elif hasattr(fo.constants, "TEAM_VERSION"):
+            if Version(fo.constants.TEAM_VERSION) < Version("2.17.0"):
+                remove_neg_pts = True
+        if remove_neg_pts and keypoint_labels:
+            ctx.ops.notify(
+                "Negative prompting not available with installed fiftyone version. Removing negative points.",
+                variant="warning",
+            )
+            keypoints = [
+                kpt for kpt, lbl in zip(keypoints, keypoint_labels) if lbl != 0
+            ]
+            keypoint_labels = None
+
         keypoint = fo.Keypoint(
             points=keypoints,
             label=label_name,
-            sam_labels=keypoint_labels,
         )
+        if keypoint_labels:
+            keypoint.sam_labels = keypoint_labels
 
         if sample.has_field(field_name) and sample[field_name] is not None:
             num_kpts = len(sample[field_name].keypoints)
