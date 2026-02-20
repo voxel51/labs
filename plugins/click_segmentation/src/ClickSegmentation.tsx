@@ -11,6 +11,7 @@ export function ClickSegmentation() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isNegativeClick, setIsNegativeClick] = useState(false);
   const [isSingleClick, setSingleClick] = useState(false);
+  const [useDelegation, setUseDelegation] = useState(false);
   const [keypointFieldName, setKeypointFieldName] = useState("user_clicks");
   const [segFieldName, setSegFieldName] = useState("");
   const [modelName, setModelName] = useState(
@@ -110,6 +111,7 @@ export function ClickSegmentation() {
     isNegativeClick,
     modelName,
     keypointFieldName,
+    useDelegation,
   ]);
 
   const saveAsKeypoints = async () => {
@@ -150,14 +152,21 @@ export function ClickSegmentation() {
         kpts_field_name: keypointFieldName.trim(),
         label_name: labelName.trim(),
       });
+      console.log("Delegation ", useDelegation);
       // Add a delay to ensure keypoints are available
       // TODO: Remove delay. Find a better fix.
       await new Promise((resolve) => setTimeout(resolve, 10));
-      await executeOperator("@51labs/click_segmentation/segment_with_prompts", {
-        prompt_field: keypointFieldName.trim(),
-        model_name: modelName.trim(),
-        label_field: segFieldName.trim(),
-      });
+      await executeOperator(
+        "@51labs/click_segmentation/segment_with_prompts",
+        {
+          prompt_field: keypointFieldName.trim(),
+          model_name: modelName.trim(),
+          label_field: segFieldName.trim(),
+        },
+        {
+          requestDelegation: useDelegation,
+        }
+      );
       setClicks([]);
     } catch (error) {
       console.error("Error auto segmenting:", error);
@@ -172,11 +181,17 @@ export function ClickSegmentation() {
       if (!isSingleClick) {
         alert("Segmentation in progress");
       }
-      await executeOperator("@51labs/click_segmentation/segment_with_prompts", {
-        prompt_field: keypointFieldName.trim(),
-        model_name: modelName.trim(),
-        label_field: segFieldName.trim(),
-      });
+      await executeOperator(
+        "@51labs/click_segmentation/segment_with_prompts",
+        {
+          prompt_field: keypointFieldName.trim(),
+          model_name: modelName.trim(),
+          label_field: segFieldName.trim(),
+        },
+        {
+          requestDelegation: useDelegation,
+        }
+      );
     } catch (error) {
       console.error("Error saving keypoints:", error);
       alert(`Failed: ${error.message}`);
@@ -615,6 +630,24 @@ export function ClickSegmentation() {
         >
           Segment with keypoints
         </button>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            fontSize: "13px",
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={useDelegation}
+            onChange={(e) => setUseDelegation(e.target.checked)}
+            style={{ cursor: "pointer" }}
+          />
+          Use Delegated Operation
+        </label>
       </div>
     </div>
   );
