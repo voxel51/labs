@@ -45,8 +45,6 @@ _Add another set of clicks for sky and save as keypoints_
 
 <img src="assets/clicks_sky.png" alt="Keypoints for sky" width="800">
 
-NOTE: Clicked points are currently not rendered in the Sample modal. You can view them via the keypoints label field.
-
 _Choose a segmentation model from FiftyOne model zoo and click on Segment with Keypoints button_
 
 <img src="assets/seg_success_notification.png" alt="Segmentation successful" width="800">
@@ -64,3 +62,15 @@ _In the Click To Segment panel, enable single click segmentation by checking the
 _Add a click on the Sample modal to trigger auto-segmentation_
 
 <img src="assets/output_single_click_segmentation.png" alt="Keypoints for sky" width="800">
+
+### Segment With Prompt Operator
+
+_Launch the Segment With Prompts operator from the dropdown operators menu_
+
+<img src="assets/open_seg_with_prompts_op.png" alt="Segment-With-Prompts operator" width="800">
+
+_Add inputs and trigger execution_
+
+<img src="assets/seg_with_prompts_op.png" alt="Segment-With-Prompts operator" width="800">
+
+**Delegated Operation** To run `Segment With Prompts` operator with delegated operation, see the instructions [here](https://docs.voxel51.com/plugins/using_plugins.html#delegated-operations). You can also enable delegated operation via _Click To Segment_ panel by checking the `Use delegated operation` checkbox next to _Segment With Keypoints_ button.
