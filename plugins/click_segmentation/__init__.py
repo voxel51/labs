@@ -95,6 +95,10 @@ class SaveKeypoints(foo.Operator):
             if Version(fo.constants.TEAM_VERSION) < Version("2.17.0"):
                 remove_neg_pts = True
         if remove_neg_pts and keypoint_labels:
+            ctx.ops.notify(
+                "Negative prompting not available with the installed fiftyone version. Removing negative points.",
+                variant="warning",
+            )
             keypoints = [
                 kpt for kpt, lbl in zip(keypoints, keypoint_labels) if lbl != 0
             ]
@@ -103,8 +107,9 @@ class SaveKeypoints(foo.Operator):
         keypoint = fo.Keypoint(
             points=keypoints,
             label=label_name,
-            sam_labels=keypoint_labels,
         )
+        if keypoint_labels:
+            keypoint.sam_labels = keypoint_labels
 
         if (
             not overwrite
