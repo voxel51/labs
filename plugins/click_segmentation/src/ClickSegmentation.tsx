@@ -4,7 +4,6 @@ import _ from "lodash";
 import { useRecoilValue } from "recoil";
 import styled from "styled-components";
 import { useState, useRef, useCallback, useEffect } from "react";
-import Overview from "../../../../fiftyone/app/packages/core/src/plugins/SchemaIO/components/NativeModelEvaluationView/Overview";
 
 export function ClickSegmentation() {
   const modalSample = useRecoilValue(fos.modalSample);
@@ -168,7 +167,7 @@ export function ClickSegmentation() {
         label_name: labelName.trim(),
         overwrite: true,
       });
-      console.log("Delegation ", useDelegation);
+
       // Add a delay to ensure keypoints are available
       // TODO: Remove delay. Find a better fix.
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -184,7 +183,6 @@ export function ClickSegmentation() {
           requestDelegation: useDelegation,
         }
       );
-      setClicks([]);
     } catch (error) {
       console.error("Error auto segmenting:", error);
       alert(`Failed: ${error.message}`);
@@ -195,6 +193,7 @@ export function ClickSegmentation() {
 
   const segmentWithKeypoints = async () => {
     try {
+      console.log("Segmenting with keypoints");
       if (!isSingleClick) {
         alert("Segmentation in progress");
       }
