@@ -1,0 +1,62 @@
+name: Plugin Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test-plugins:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        plugin:
+          - template
+          # Add more plugins as they get test suites
+          # - few_shot_learning
+          # - video_apply_model
+          # - click_segmentation
+          # - labs_panel
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install FiftyOne
+        run: |
+          pip install fiftyone
+      
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-cov pytest-xdist
+      
+      - name: Discover and run tests
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          if [ -d "tests" ]; then
+            # Add plugin parent directory to PYTHONPATH for imports
+            export PYTHONPATH="${GITHUB_WORKSPACE}/plugins:${PYTHONPATH}"
+            pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=term
+          else
+            echo "No tests directory found for plugin ${{ matrix.plugin }}"
+            exit 0
+          fi
+      
+      - name: Upload coverage reports
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./plugins/${{ matrix.plugin }}/coverage.xml
+          flags: ${{ matrix.plugin }}
+          name: ${{ matrix.plugin }}-coverage
+          fail_ci_if_error: false
