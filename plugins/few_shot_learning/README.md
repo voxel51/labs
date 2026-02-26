@@ -96,12 +96,12 @@ Click **Reset Session** to clear all session state and delete the `fewshot_predi
 
 ### Embeddings
 
-| Display Name      | Zoo Model                  | Field Default              | Dimensions |
-| ----------------- | -------------------------- | -------------------------- | ---------- |
-| ResNet18          | `resnet18-imagenet-torch`  | `resnet18_embeddings`      | 512        |
-| ResNet50          | `resnet50-imagenet-torch`  | `resnet50_embeddings`      | 2048       |
-| CLIP (ViT-B/32)  | `clip-vit-base32-torch`    | `clip_vit_b32_embeddings`  | 512        |
-| DINOv2 (ViT-B/14)| `dinov2-vitb14-torch`      | `dinov2_vitb14_embeddings` | 768        |
+| Display Name      | Zoo Model                 | Field Default              | Dimensions |
+| ----------------- | ------------------------- | -------------------------- | ---------- |
+| ResNet18          | `resnet18-imagenet-torch` | `resnet18_embeddings`      | 512        |
+| ResNet50          | `resnet50-imagenet-torch` | `resnet50_embeddings`      | 2048       |
+| CLIP (ViT-B/32)   | `clip-vit-base32-torch`   | `clip_vit_b32_embeddings`  | 512        |
+| DINOv2 (ViT-B/14) | `dinov2-vitb14-torch`     | `dinov2_vitb14_embeddings` | 768        |
 
 The embedding field name auto-updates when you change the model, but only if you haven't set a custom name. Embeddings are computed automatically for any samples missing them.
 
@@ -112,6 +112,7 @@ If the selected field already contains embeddings with a different dimension tha
 Hyperparameters are configured directly in the panel UI during an active session:
 
 **RocchioPrototypeModel**:
+
 - `mode`: `proto_softmax` (nearest centroid scoring) or `rocchio_sigmoid` (query vector dot product). Default: `proto_softmax`
 - `beta`: Weight for positive centroid. Default: `1.0`
 - `gamma`: Weight for negative centroid. Default: `1.0`

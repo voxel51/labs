@@ -1,0 +1,102 @@
+---
+name: Plugin Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FIFTYONE_DO_NOT_TRACK: true
+      FIFTYONE_DATABASE_ADMIN: true
+      FIFTYONE_DATABASE_URI: mongodb://127.0.0.1:27017
+      FIFTYONE_PRIVATE_DATABASE_PORT: 27017
+      # Assuming no pytest should take more than 120 seconds
+      PYTEST_TIMEOUT: 120
+
+    strategy:
+      matrix:
+        # Implementation question for Aloha:
+        # Which mongodb/python versions should we test?
+        python-version:
+          - "3.10"
+          - "3.11"
+        mongodb-version:
+          - "8"
+    steps:
+      - name: Checkout `voxel51/fiftyone-labs`
+        uses: actions/checkout@v6
+
+      # Implementation question for ML:
+      # which enterprise version or branch do you want to use?
+      - name: Checkout `voxel51/fiftyone`
+        uses: actions/checkout@v6
+        with:
+          path: fiftyone
+          repository: voxel51/fiftyone-teams
+          token: ${{ secrets.RO_FOT_FG_PAT }}
+          sparse-checkout: |
+            /*
+            !/docs/**
+          sparse-checkout-cone-mode: false
+
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.12.1
+        with:
+          mongodb-version: ${{ matrix.mongodb-version }}
+
+      - name: Set up Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Not caching here for transient dependencies
+      - name: Setup (UV)
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install requirements (UV)
+        run: |
+          grep -h '' ./fiftyone/deployment/docker/requirements/*.txt \
+            | grep -v '#' \
+            | sort \
+            | uniq > "${{ runner.temp }}/foe-requirements.txt"
+
+          echo "[INFO]: Generated requirements below"
+          echo "--------------------------------------"
+          cat "${{ runner.temp }}/foe-requirements.txt"
+          echo "--------------------------------------"
+
+          uv pip install --system -U \
+            wheel \
+            setuptools \
+            ./fiftyone \
+            -r "${{ runner.temp }}/foe-requirements.txt" \
+            -r requirements/test.txt
+
+      - name: Run non-intensive tests
+        run: |
+          export FIFTYONE_PLUGINS_DIR="${PWD}"
+          export PYTHONPATH="${PWD}:${{ github.workspace }}/fiftyone:${PYTHONPATH}"
+
+          python -m pytest \
+            ./plugins/ \
+            --ignore-glob="**/tests/intensive" \
+            --verbose \
+            --tb=short \
+            --cov=. \
+            --cov-report=xml \
+            --cov-report=term
