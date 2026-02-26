@@ -1,0 +1,62 @@
+---
+name: Plugin Tests
+
+on:
+  push:
+    branches: 
+      - main
+      - afoley/as-1312-fiftyone-labs-ci
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout `voxel51/fiftyone-labs`
+        uses: actions/checkout@v6
+      
+      - name: Checkout `voxel51/fiftyone`
+        uses: actions/checkout@v6
+        with:
+          path: fiftyone
+          repository: voxel51/fiftyone-teams
+          token: ${{ secrets.RO_FOT_FG_PAT }}
+          sparse-checkout: |
+            /*
+            !/docs/**
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # Not caching here for transient dependencies
+      - name: Setup (UV)
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.10'
+
+      - name: Install requirements (UV)
+        run: |
+          uv pip install --system -U \
+            wheel \
+            setuptools \
+            ./fiftyone \
+            -r requirements/github.txt
+
+      - name: Run non-intensive tests
+        working-directory: plugins
+        env:
+          FIFTYONE_PLUGINS_DIR: ${{ github.workspace }}/plugins
+        run: |
+          python -m pytest \
+            ./ \
+            --ignore-glob=tests/intensive \
+            --verboose --tb=short \
+            --cov=. \
+            --cov-report=xml \
+            --cov-report=term
