@@ -25,7 +25,9 @@ def _as_float32_2d_embeddings(embeddings: Any) -> np.ndarray:
     """Convert input embeddings to a `(N, D)` float32 NumPy array."""
     arr = np.asarray(embeddings, dtype=np.float32)
     if arr.ndim != 2:
-        raise ValueError(f"Expected embeddings with shape (N, D), got {arr.shape}")
+        raise ValueError(
+            f"Expected embeddings with shape (N, D), got {arr.shape}"
+        )
     return arr
 
 
@@ -142,7 +144,9 @@ class RocchioPrototypeModel(_BaseModel):
         self._beta = float(self.hyperparams.get("beta", 1.0))
         self._gamma = float(self.hyperparams.get("gamma", 1.0))
         self._temperature = float(self.hyperparams.get("temperature", 1.0))
-        self._normalize_embeddings = bool(self.hyperparams.get("normalize_embeddings", True))
+        self._normalize_embeddings = bool(
+            self.hyperparams.get("normalize_embeddings", True)
+        )
 
         self._pos_centroid: np.ndarray | None = None
         self._neg_centroid: np.ndarray | None = None
@@ -158,7 +162,9 @@ class RocchioPrototypeModel(_BaseModel):
 
     def fit_step(self, batches: Sequence[BatchDict]) -> None:
         """Fit class centroids from labeled embedding batches."""
-        embeddings, labels = _stack_embeddings_and_labels(batches, require_labels=True)
+        embeddings, labels = _stack_embeddings_and_labels(
+            batches, require_labels=True
+        )
         labels = _normalize_binary_labels(labels, "RocchioPrototypeModel")
 
         if len(np.unique(labels)) < 2:
@@ -173,7 +179,9 @@ class RocchioPrototypeModel(_BaseModel):
 
         self._pos_centroid = pos.mean(axis=0)
         self._neg_centroid = neg.mean(axis=0)
-        self._query_vector = self._beta * self._pos_centroid - self._gamma * self._neg_centroid
+        self._query_vector = (
+            self._beta * self._pos_centroid - self._gamma * self._neg_centroid
+        )
         self._fitted = True
 
     def _predict_dict(self, batch: BatchDict) -> BatchDict:
@@ -191,8 +199,12 @@ class RocchioPrototypeModel(_BaseModel):
 
         temp = max(self._temperature, 1e-8)
         if self._mode == "proto_softmax":
-            dist_to_pos = np.linalg.norm(transformed - self._pos_centroid, axis=1)
-            dist_to_neg = np.linalg.norm(transformed - self._neg_centroid, axis=1)
+            dist_to_pos = np.linalg.norm(
+                transformed - self._pos_centroid, axis=1
+            )
+            dist_to_neg = np.linalg.norm(
+                transformed - self._neg_centroid, axis=1
+            )
             scores = _sigmoid((dist_to_neg - dist_to_pos) / temp)
         elif self._mode == "rocchio_sigmoid":
             raw = transformed @ self._query_vector
@@ -209,7 +221,9 @@ class RocchioPrototypeModel(_BaseModel):
         return self._fitted
 
 
-def get_model(name: str, hyperparams: dict[str, Any] | None = None) -> _BaseModel:
+def get_model(
+    name: str, hyperparams: dict[str, Any] | None = None
+) -> _BaseModel:
     """Instantiate one of the plugin's built-in few-shot model classes."""
     hyperparams = dict(hyperparams or {})
 

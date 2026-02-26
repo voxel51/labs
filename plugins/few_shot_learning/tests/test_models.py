@@ -18,7 +18,9 @@ from few_shot_learning.models import (
 )
 
 
-def _make_binary_data(n_pos: int = 20, n_neg: int = 20, dim: int = 16, seed: int = 42):
+def _make_binary_data(
+    n_pos: int = 20, n_neg: int = 20, dim: int = 16, seed: int = 42
+):
     rng = np.random.default_rng(seed)
     pos = rng.normal(loc=1.0, scale=0.4, size=(n_pos, dim)).astype(np.float32)
     neg = rng.normal(loc=-1.0, scale=0.4, size=(n_neg, dim)).astype(np.float32)
@@ -42,7 +44,12 @@ def test_rocchio_fit_predict():
     embeddings, labels = _make_binary_data()
     model = get_model(
         "RocchioPrototypeModel",
-        {"mode": "proto_softmax", "beta": 1.0, "gamma": 1.0, "temperature": 1.0},
+        {
+            "mode": "proto_softmax",
+            "beta": 1.0,
+            "gamma": 1.0,
+            "temperature": 1.0,
+        },
     )
     model.fit_step([{"embeddings": embeddings, "labels": labels}])
 
@@ -63,6 +70,9 @@ def test_stack_embeddings_labels_rejects_mixed_batches():
     emb = np.random.randn(4, 8).astype(np.float32)
     with pytest.raises(ValueError, match="Mixed batches"):
         _stack_embeddings_and_labels(
-            [{"embeddings": emb, "labels": np.array([0, 1, 0, 1])}, {"embeddings": emb}],
+            [
+                {"embeddings": emb, "labels": np.array([0, 1, 0, 1])},
+                {"embeddings": emb},
+            ],
             require_labels=False,
         )

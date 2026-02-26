@@ -3,9 +3,8 @@ name: Plugin Tests
 
 on:
   push:
-    branches: 
+    branches:
       - main
-      - afoley/as-1312-fiftyone-labs-ci
   pull_request:
     branches:
       - main
@@ -23,11 +22,19 @@ jobs:
       # Assuming no pytest should take more than 120 seconds
       PYTEST_TIMEOUT: 120
 
+    strategy:
+      matrix:
+        # Implementation question for Aloha:
+        # Which mongodb/python versions should we test?
+        python-version:
+          - "3.10"
+        mongodb-version:
+          - "8"
     steps:
       - name: Checkout `voxel51/fiftyone-labs`
         uses: actions/checkout@v6
-      
-      # Implementation question for ML: 
+
+      # Implementation question for ML:
       # which enterprise version or branch do you want to use?
       - name: Checkout `voxel51/fiftyone`
         uses: actions/checkout@v6
@@ -39,24 +46,22 @@ jobs:
             /*
             !/docs/**
           sparse-checkout-cone-mode: false
-      
-      # Implementation question for Aloha: 
-      # Which mongodb/python versions should we test?
+
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.12.1
         with:
-          mongodb-version: "8"
+          mongodb-version: ${{ matrix.mongodb-version }}
 
       - name: Set up Python environment
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: ${{ matrix.python-version }}
 
       # Not caching here for transient dependencies
       - name: Setup (UV)
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Install requirements (UV)
         run: |
