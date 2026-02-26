@@ -14,6 +14,15 @@ on:
 jobs:
   run-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FIFTYONE_DO_NOT_TRACK: true
+      FIFTYONE_DATABASE_ADMIN: true
+      FIFTYONE_DATABASE_URI: mongodb://127.0.0.1:27017
+      FIFTYONE_PRIVATE_DATABASE_PORT: 27017
+      # Assuming no pytest should take more than 120 seconds
+      PYTEST_TIMEOUT: 120
+
     steps:
       - name: Checkout `voxel51/fiftyone-labs`
         uses: actions/checkout@v6
@@ -30,6 +39,13 @@ jobs:
             /*
             !/docs/**
           sparse-checkout-cone-mode: false
+      
+      # Implementation question for Aloha: 
+      # Which mongodb/python versions should we test?
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.12.1
+        with:
+          mongodb-version: "8"
 
       - name: Set up Python environment
         uses: actions/setup-python@v5
@@ -48,7 +64,8 @@ jobs:
             wheel \
             setuptools \
             ./fiftyone \
-            -r plugins/requirements/github.txt
+            -r plugins/requirements/github.txt \
+            -r plugins/requirements/text.txt
 
       - name: Run non-intensive tests
         working-directory: plugins
