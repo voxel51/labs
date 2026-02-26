@@ -64,18 +64,17 @@ jobs:
             wheel \
             setuptools \
             ./fiftyone \
-            -r plugins/requirements/github.txt \
-            -r plugins/requirements/test.txt
+            -r requirements/github.txt \
+            -r requirements/test.txt
 
       - name: Run non-intensive tests
-        working-directory: plugins
         run: |
           export FIFTYONE_PLUGINS_DIR="${PWD}"
           export PYTHONPATH="${PWD}:${{ github.workspace }}/fiftyone:${PYTHONPATH}"
 
           python -m pytest \
-            ./ \
-            --ignore-glob=tests/intensive \
+            ./plugins/ \
+            --ignore-glob="**/tests/intensive" \
             --verboose --tb=short \
             --cov=. \
             --cov-report=xml \
