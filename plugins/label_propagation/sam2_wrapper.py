@@ -1,17 +1,13 @@
 import os
 import tempfile
-import shutil
 from pathlib import Path
 import logging
 from typing import Tuple, Union, Optional, Any, List
 from collections import OrderedDict
-import urllib.request
-from urllib.error import URLError
 from dataclasses import dataclass
 
 import numpy as np
 import cv2
-from tqdm import tqdm
 
 import fiftyone as fo
 from .utils import bbox_corners_in_pixel_coords, fit_mask_to_bbox
@@ -322,7 +318,7 @@ class PropagatorSAM2:
         return result
 
 
-def propagate_annotations_sam2(
+def propagate_annotations_sam2_neeraja(
     view: Union[fo.Dataset, fo.DatasetView],
     input_annotation_field: str,
     output_annotation_field: str,
@@ -407,4 +403,104 @@ def propagate_annotations_sam2(
             )
         )
 
+    return {}
+
+
+
+def propagate_annotations_sam2(
+    view: Union[fo.Dataset, fo.DatasetView],
+    input_annotation_field: str,
+    output_annotation_field: str,
+    sort_field: Optional[str] = None,
+    progress: Optional[bool] = True,
+) -> dict[str, float]:
+    """
+    Propagate annotations from exemplar frames (containing labels in input_annotation_field) to all the frames.
+    Args:
+        view: The view to propagate annotations from
+        input_annotation_field: The field name of the annotation to copy from the exemplar frame field
+        output_annotation_field: The field name of the annotation to save to the target frame
+        sort_field: Field to sort samples by
+        progress: Whether to show progress bars (True/False) or use default (None)
+    """
+    import fiftyone.core.labels as fol
+    import fiftyone.zoo as foz
+    # Fo SAM2 video model (fiftyone.utils.sam2.SegmentAnything2VideoModel)
+    # is loaded via zoo; its predict() does init_state + propagation internally.
+
+    # Ordered frame paths and per-frame prompts from view
+    if sort_field and view.has_field(sort_field):
+        ordered = list(
+            view.sort_by(sort_field).iter_samples(progress=progress)
+        )
+    else:
+        ordered = list(view.iter_samples(progress=progress))
+    paths = [s.filepath for s in ordered]
+    prompts_per_frame = [
+        s.get_field(input_annotation_field) if s.get_field(input_annotation_field) else fol.Detections(detections=[])
+        for s in ordered
+    ]
+
+    # Mock frame: frame field "detections" for Fo model's _get_prompts
+    class MockFrame:
+        def __init__(self, detections):
+            self._detections = detections
+
+        def get_field(self, name):
+            if name == "detections":
+                return self._detections
+            return None
+
+    # Mock sample: .frames = {1: ..., 2: ..., ...} for Fo's load_fiftyone_video_frames and _get_prompts
+    class MockSample:
+        def __init__(self, frames_dict):
+            self.frames = frames_dict
+
+    mock_frames = {
+        i + 1: MockFrame(prompts_per_frame[i]) for i in range(len(paths))
+    }
+    mock_sample = MockSample(mock_frames)
+
+    # Video reader: .frame_size and .read() for Fo's load_fiftyone_video_frames
+    first_img = cv2.imread(paths[0])
+    if first_img is None:
+        raise RuntimeError(f"Could not read first frame: {paths[0]}")
+    first_img = cv2.cvtColor(first_img, cv2.COLOR_BGR2RGB)
+    w, h = first_img.shape[1], first_img.shape[0]
+
+    class ImageSequenceReader:
+        def __init__(self, path_list):
+            self.path_list = path_list
+            self._idx = 0
+            self._first = first_img
+
+        @property
+        def frame_size(self):
+            return (w, h)
+
+        def read(self):
+            if self._first is not None:
+                out = self._first
+                self._first = None
+                return out
+            img = cv2.imread(self.path_list[self._idx])
+            self._idx += 1
+            if img is None:
+                return np.zeros((h, w, 3), dtype=np.uint8)
+            return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    video_reader = ImageSequenceReader(paths)
+
+    # Load Fo SAM2 video model and run predict (no propagate_in_video in our code)
+    model = foz.load_zoo_model("segment-anything-2-hiera-tiny-video-torch")
+    model.needs_fields = {"prompt_field": "frames.detections"}
+    sample_detections = model.predict(video_reader, mock_sample)
+
+    # sample_detections is {frame_number: fol.Detections} (1-based)
+    for i, sample in enumerate(ordered):
+        fn = i + 1
+        sample[output_annotation_field] = sample_detections.get(
+            fn, fol.Detections(detections=[])
+        )
+        sample.save()
     return {}
