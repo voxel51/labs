@@ -37,6 +37,4 @@ jobs:
         run: sudo apt install -y libsqlite3-dev libbz2-dev
       - name: Install asdf & tools
         uses: ./.github/actions/aloha-github-workflows/.github/actions/asdf-install-and-cache
-      - name: Install helm plugins
-        run: make helm-plugins
       - uses: pre-commit/action@v3.0.1
