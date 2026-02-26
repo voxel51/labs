@@ -18,6 +18,8 @@ jobs:
       - name: Checkout `voxel51/fiftyone-labs`
         uses: actions/checkout@v6
       
+      # Implementation question for ML: 
+      # which enterprise version or branch do you want to use?
       - name: Checkout `voxel51/fiftyone`
         uses: actions/checkout@v6
         with:
@@ -46,13 +48,14 @@ jobs:
             wheel \
             setuptools \
             ./fiftyone \
-            -r requirements/github.txt
+            -r plugins/requirements/github.txt
 
       - name: Run non-intensive tests
         working-directory: plugins
-        env:
-          FIFTYONE_PLUGINS_DIR: ${{ github.workspace }}/plugins
         run: |
+          export FIFTYONE_PLUGINS_DIR="${PWD}"
+          export PYTHONPATH="${PWD}:${{ github.workspace }}/fiftyone:${PYTHONPATH}"
+
           python -m pytest \
             ./ \
             --ignore-glob=tests/intensive \
