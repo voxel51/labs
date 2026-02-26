@@ -65,7 +65,7 @@ jobs:
 
       - name: Install requirements (UV)
         run: |
-          grep -h '' ../fiftyone-teams/deployment/docker/requirements/*.txt \
+          grep -h '' ./fiftyone/deployment/docker/requirements/*.txt \
             | grep -v '#' \
             | sort \
             | uniq > "${{ runner.temp }}/foe-requirements.txt"
