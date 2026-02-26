@@ -65,7 +65,7 @@ jobs:
             setuptools \
             ./fiftyone \
             -r plugins/requirements/github.txt \
-            -r plugins/requirements/text.txt
+            -r plugins/requirements/test.txt
 
       - name: Run non-intensive tests
         working-directory: plugins
