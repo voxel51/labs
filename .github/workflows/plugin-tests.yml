@@ -65,11 +65,21 @@ jobs:
 
       - name: Install requirements (UV)
         run: |
+          grep -h '' ../fiftyone-teams/deployment/docker/requirements/*.txt \
+            | grep -v '#' \
+            | sort \
+            | uniq > "${{ runner.temp }}/foe-requirements.txt"
+
+          echo "[INFO]: Generated requirements below"
+          echo "--------------------------------------"
+          cat "${{ runner.temp }}/foe-requirements.txt"
+          echo "--------------------------------------"
+
           uv pip install --system -U \
             wheel \
             setuptools \
             ./fiftyone \
-            -r requirements/github.txt \
+            -r "${{ runner.temp }}/foe-requirements.txt" \
             -r requirements/test.txt
 
       - name: Run non-intensive tests
