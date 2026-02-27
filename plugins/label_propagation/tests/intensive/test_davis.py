@@ -122,6 +122,7 @@ def test_propagate_labels(partially_labeled_dataset_view):
             "labels_test_propagated.detections"
         )
     ]
+    assert np.abs(areas[2] - areas[3]) > 1e-4
     assert np.min(areas) > 0.35
 
     # TODO(neeraja): add evaluation [in a follow-up PR]

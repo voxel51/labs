@@ -12,7 +12,7 @@ import fiftyone as fo
 import fiftyone.operators as foo
 import fiftyone.operators.types as types
 
-from .sam2_wrapper import propagate_annotations_sam2
+from .sam2_wrapper import propagate_annotations_sam2, propagate_annotations_deepsort
 from .exemplars import extract_exemplar_frames, SUPPORTED_SELECTION_METHODS
 from .panel import LabelPropagationPanel
 
@@ -225,7 +225,7 @@ class PropagateLabels(foo.Operator):
         sort_field = ctx.params.get("sort_field", None)
 
         try:
-            _ = propagate_annotations_sam2(
+            _ = propagate_annotations_deepsort(
                 view=view,
                 input_annotation_field=input_annotation_field,
                 output_annotation_field=output_annotation_field,

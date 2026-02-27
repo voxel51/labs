@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 
 import fiftyone as fo
+import fiftyone.core.utils as fou
 from .utils import bbox_corners_in_pixel_coords, fit_mask_to_bbox
 
 
@@ -431,10 +432,10 @@ def propagate_annotations_sam2(
     # Ordered frame paths and per-frame prompts from view
     if sort_field and view.has_field(sort_field):
         ordered = list(
-            view.sort_by(sort_field).iter_samples(progress=progress)
+            view.sort_by(sort_field).iter_samples(progress=progress)  # type: ignore[arg-type]
         )
     else:
-        ordered = list(view.iter_samples(progress=progress))
+        ordered = list(view.iter_samples(progress=progress))  # type: ignore[arg-type]
     paths = [s.filepath for s in ordered]
     prompts_per_frame = [
         s.get_field(input_annotation_field) if s.get_field(input_annotation_field) else fol.Detections(detections=[])
@@ -503,4 +504,107 @@ def propagate_annotations_sam2(
             fn, fol.Detections(detections=[])
         )
         sample.save()
+    return {}
+
+
+def propagate_annotations_deepsort(
+    view: Union[fo.Dataset, fo.DatasetView],
+    input_annotation_field: str,
+    output_annotation_field: str,
+    sort_field: Optional[str] = None,
+    progress: Optional[bool] = True,
+) -> dict[str, float]:
+    """
+    Propagate annotations from exemplar frames (containing labels in input_annotation_field) to all the frames.
+    Args:
+        view: The view to propagate annotations from
+        input_annotation_field: The field name of the annotation to copy from the exemplar frame field
+        output_annotation_field: The field name of the annotation to save to the target frame
+        sort_field: Field to sort samples by
+        progress: Whether to show progress bars (True/False) or use default (None)
+    """
+    from fiftyone.utils.tracking.deepsort import DeepSort
+
+    if len(view) == 0:  # type: ignore[len-operand]
+        return {}
+
+    ordered_view = (
+        view.sort_by(sort_field) if sort_field and view.has_field(sort_field) else view
+    )
+    dataset = view._dataset
+    media_type = getattr(dataset, "media_type", None)
+
+    if media_type == "video":
+        # Dataset consists of video samples; DeepSort.track expects a SampleCollection
+        DeepSort.track(
+            ordered_view,
+            in_field=input_annotation_field,
+            out_field=output_annotation_field,
+            progress=progress,
+        )
+        return {}
+
+    if media_type == "image":
+        # Image collection: try DeepSort via temporary video
+        first_img = cv2.imread(ordered_view.first().filepath)
+        if first_img is None:
+            raise RuntimeError(
+                f"Could not read first frame: {ordered_view.first().filepath}"
+            )
+        first_img = cv2.cvtColor(first_img, cv2.COLOR_BGR2RGB)
+        h, w = first_img.shape[:2]
+
+        detections_list = list(
+            ordered_view.values(input_annotation_field) or []
+        )
+        detections_list = [
+            d if d is not None else fo.Detections(detections=[])
+            for d in detections_list
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            video_path = os.path.join(temp_dir, "video.mp4")
+            video_writer = cv2.VideoWriter(
+                video_path,
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                30,
+                (w, h),
+            )
+            for filepath in list(ordered_view.values("filepath") or []):
+                img = cv2.imread(filepath)
+                if img is not None:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                else:
+                    img = np.zeros((h, w, 3), dtype=np.uint8)
+                video_writer.write(img)
+            video_writer.release()
+
+            frames: dict[int, fo.Frame] = {}
+            for i in range(len(detections_list)):
+                frames[i + 1] = fo.Frame(**{input_annotation_field: detections_list[i]})
+
+            video_sample = fo.Sample(
+                filepath=video_path,
+                media_type="video",
+            )
+            video_sample.frames.update(frames)
+
+            dsrt = DeepSort()
+            dsrt.track_sample(
+                video_sample,
+                in_field=input_annotation_field,
+                out_field=output_annotation_field,
+            )
+
+            propagated_list = [
+                getattr(
+                    video_sample.frames[i + 1],
+                    output_annotation_field,
+                    fo.Detections(detections=[])
+                )
+                for i in range(len(detections_list))
+            ]
+
+        ordered_view.set_values(output_annotation_field, propagated_list)
+
     return {}
